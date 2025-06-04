@@ -17,6 +17,7 @@ import {
   FaBoxOpen,
   FaTable,
 } from 'react-icons/fa';
+import { MdTableRestaurant } from 'react-icons/md';
 
 const Sidebar = () => {
   const [itemsToRender, setItemsToRender] = useState([]);
@@ -40,7 +41,7 @@ const Sidebar = () => {
 
     // 💸 Finances
     { name: 'Expenses', path: '/admin-dashboard/Expense', icon: <FaMoneyBillWave /> },
-    { name: 'Tables', path: '/admin-dashboard/Table', icon: <FaMoneyBillWave /> },
+    { name: 'Tables', path: '/admin-dashboard/Table', icon: <MdTableRestaurant /> },
 
     // ⚙️ Others
     { name: 'Profile', path: '/admin-dashboard/profile', icon: <FaCog /> },
@@ -52,7 +53,7 @@ const Sidebar = () => {
     { name: 'My Orders', path: '/employee-dashboard/orders', icon: <FaShoppingCart />, isParent: false },
     { name: 'Menu', path: '/admin-dashboard/products', icon: <FaUtensils />, isParent: false },
     { name: 'Categories', path: '/admin-dashboard/categories', icon: <FaTable />, isParent: false },
-     { name: 'Tables', path: '/admin-dashboard/Table', icon: <FaMoneyBillWave /> },
+     { name: 'Tables', path: '/admin-dashboard/Table', icon: <MdTableRestaurant /> },
     { name: 'Chef', path: '/admin-dashboard/supplier', icon: <FaUserTie />, isParent: false },
     { name: 'Logout', path: '/logout', icon: <FaSignOutAlt />, isParent: true },
   ];
