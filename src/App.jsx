@@ -19,6 +19,7 @@ import InventorySupplier from "./components/InventorySupplier";
 import Staff from "./components/Staff";
 import Expense from "./components/Expense";
 import Table from "./components/Table";
+import KOTInterface from "./components/KOTInterface";
 import RoomTableSelection from './components/RoomTableSelection';
 
 const App = () => (
@@ -75,6 +76,14 @@ const App = () => (
             element={
               <ProtectedRoute requiredRole={["admin", "user"]}>
                 <Table />
+              </ProtectedRoute>
+            }
+          />
+           <Route
+            path="kot/:roomId/:tableId"
+            element={
+              <ProtectedRoute requiredRole={["admin", "user"]}>
+                <KOTInterface />
               </ProtectedRoute>
             }
           />
@@ -148,6 +157,15 @@ const App = () => (
           <Route index element={<EmployeeProducts />} />
           <Route path="orders" element={<Orders />} />
           <Route path="profile" element={<Profile />} />
+          <Route
+            path="kot/:roomId/:tableId"
+            element={
+              <ProtectedRoute requiredRole={["user"]}>
+                <KOTInterface />
+              </ProtectedRoute>
+            }
+          />
+          
         </Route>
 
         <Route path="/logout" element={<Logout />} />
