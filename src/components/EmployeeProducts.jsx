@@ -108,6 +108,8 @@ const POSPage = () => {
         await axiosInstance.put(`/kot/close/${selectedTable}`, {}, {
           headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
         });
+        // Refresh rooms to update table status
+        await fetchData();
       }
 
       setBillData({ 
@@ -649,7 +651,7 @@ const POSPage = () => {
                     {room.tables.map((table) => (
                       <motion.div
                         key={table._id}
-                        onClick={() => table.status === 'available' && handleTableSelect(room._id, table._id)}
+                        onClick={() => handleTableSelect(room._id, table._id)}
                         className={`p-4 border-2 rounded-xl transition-all ${
                           table.status !== 'available'
                             ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50'
@@ -661,7 +663,7 @@ const POSPage = () => {
                         <div className="space-y-2">
                           <div className="flex justify-between items-start">
                             <div className="flex items-center gap-2">
-                              <span className="text-2xl">{table.tableType === 'Window' ? '🪟' : table.tableType === 'Corner' ? '🏠' : table.tableType === 'Booth' ? '🛋️' : '🍽️'}</span>
+                              <span className="text-2xl">{table.tableType === 'booth' ? '🛋️' : table.tableType === 'high-top' ? '🍸' : table.tableType === 'outdoor' ? '🌳' : '🍽️'}</span>
                               <div>
                                 <h4 className="font-semibold text-gray-800">Table {table.tableNumber}</h4>
                                 <p className="text-sm text-gray-600">{table.tableType}</p>
@@ -672,9 +674,11 @@ const POSPage = () => {
                                 ? 'bg-green-100 text-green-800 border-green-200' 
                                 : table.status === 'occupied'
                                 ? 'bg-red-100 text-red-800 border-red-200'
-                                : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                : table.status === 'reserved'
+                                ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                : 'bg-gray-100 text-gray-800 border-gray-200'
                             }`}>
-                              {table.status}
+                              {table.status === 'occupied' ? 'KOT Running (Occupied)' : table.status}
                             </div>
                           </div>
                           <div className="flex items-center gap-1 text-sm text-gray-600">
