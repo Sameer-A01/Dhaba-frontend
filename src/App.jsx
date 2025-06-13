@@ -20,7 +20,7 @@ import Staff from "./components/Staff";
 import Expense from "./components/Expense";
 import Table from "./components/Table";
 import KOTInterface from "./components/KOTInterface";
-import RoomTableSelection from './components/RoomTableSelection';
+import ActiveKOTsPage from "./components/ActiveKOTsPage";
 
 const App = () => (
   <AuthProvider>
@@ -79,11 +79,19 @@ const App = () => (
               </ProtectedRoute>
             }
           />
-           <Route
+          <Route
             path="kot/:roomId/:tableId"
             element={
               <ProtectedRoute requiredRole={["admin", "user"]}>
                 <KOTInterface />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="active-kots"
+            element={
+              <ProtectedRoute requiredRole={["admin", "user"]}>
+                <ActiveKOTsPage />
               </ProtectedRoute>
             }
           />
@@ -119,7 +127,7 @@ const App = () => (
               </ProtectedRoute>
             }
           />
-           <Route
+          <Route
             path="Expense"
             element={
               <ProtectedRoute requiredRole={["admin"]}>
@@ -165,7 +173,14 @@ const App = () => (
               </ProtectedRoute>
             }
           />
-          
+          <Route
+            path="active-kots"
+            element={
+              <ProtectedRoute requiredRole={["user"]}>
+                <ActiveKOTsPage />
+              </ProtectedRoute>
+            }
+          />
         </Route>
 
         <Route path="/logout" element={<Logout />} />

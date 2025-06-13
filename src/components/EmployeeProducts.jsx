@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axiosInstance from "../utils/api";
-import { ShoppingCart, X, Plus, Minus, Printer, Settings, Search, Tag, Package, DollarSign, ChevronLeft, RefreshCw, ChevronDown, MapPin, Users, Utensils } from "lucide-react";
+import { ShoppingCart, X, Printer, Settings, MapPin, Users, RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import KOTInterface from "./KOTInterface";
+import { Link } from "react-router-dom";
 
 const POSPage = () => {
   const [categories, setCategories] = useState([]);
@@ -22,13 +23,10 @@ const POSPage = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [refreshingRooms, setRefreshingRooms] = useState(false);
   const [showBill, setShowBill] = useState(false);
-  const [billData, setBillData] = useState({ kots: [], totalAmount: 0, items: [] });
+  const [billData, setBillData] = useState({ kots: [], totalAmount: 0, items: [], paymentMethod: "cash" });
 
   const billRef = useRef(null);
-  const dropdownRef = useRef(null);
-
   const user = JSON.parse(localStorage.getItem("ims_user"));
-  const userId = user?._id;
   const userName = user?.name;
   const invoiceNum = `INV-${Date.now().toString().substr(-6)}`;
 
@@ -55,7 +53,12 @@ const POSPage = () => {
   };
 
   useEffect(() => {
+    // Initial fetch
     fetchData();
+    // Set up interval to fetch data every 2 seconds
+    const intervalId = setInterval(fetchData, 2000);
+    // Clean up interval on component unmount
+    return () => clearInterval(intervalId);
   }, []);
 
   // Handle table selection
@@ -78,87 +81,85 @@ const POSPage = () => {
   };
 
   // Handle adding KOT items to bill
- const handleAddToBill = async (kot = null, generateFinalBill = false) => {
-  try {
-    const response = await axiosInstance.get(`/kot?tableId=${selectedTable}&status=preparing,ready`);
-    const kots = response.data.kots;
+  const handleAddToBill = async (kot = null, generateFinalBill = false, paymentMethod = "cash") => {
+    try {
+      const response = await axiosInstance.get(`/kot?tableId=${selectedTable}&status=preparing,ready`);
+      const kots = response.data.kots;
 
-    // Aggregate items across all KOTs
-    const itemMap = new Map();
-    kots.forEach((kot) => {
-      kot.orderItems.forEach((item) => {
-        const product = products.find((p) => p._id === (item.product?._id || item.product));
-        if (product) {
-          const key = product._id;
-          const existing = itemMap.get(key) || { product, quantity: 0, itemTotal: 0 };
-          itemMap.set(key, {
-            product,
-            quantity: existing.quantity + item.quantity,
-            itemTotal: existing.itemTotal + (product.price * item.quantity)
-          });
-        }
-      });
-    });
-
-    const items = Array.from(itemMap.values());
-    const totalAmount = items.reduce((sum, item) => sum + item.itemTotal, 0);
-
-    // If generating final bill, create an order and close all KOTs
-    if (generateFinalBill) {
-      // Prepare order data
-      const orderData = {
-        roomId: selectedRoom,
-        tableId: selectedTable,
-        kotIds: kots.map(kot => kot._id),
-        products: items.map(item => ({
-          productId: item.product._id,
-          quantity: item.quantity,
-          price: item.product.price
-        })),
-        discount: {
-          type: 'percentage',
-          value: parseFloat(companyInfo.discount) || 0,
-          reason: 'Standard discount'
-        }
-      };
-
-      // Create the order
-      const orderResponse = await axiosInstance.post('/order/add', orderData, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
+      // Aggregate items across all KOTs
+      const itemMap = new Map();
+      kots.forEach((kot) => {
+        kot.orderItems.forEach((item) => {
+          const product = products.find((p) => p._id === (item.product?._id || item.product));
+          if (product) {
+            const key = product._id;
+            const existing = itemMap.get(key) || { product, quantity: 0, itemTotal: 0 };
+            itemMap.set(key, {
+              product,
+              quantity: existing.quantity + item.quantity,
+              itemTotal: existing.itemTotal + (product.price * item.quantity),
+            });
+          }
+        });
       });
 
-      // Close all KOTs
-      await axiosInstance.put(`/kot/close/${selectedTable}`, {}, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
+      const items = Array.from(itemMap.values());
+      const totalAmount = items.reduce((sum, item) => sum + item.itemTotal, 0);
+
+      // If generating final bill, create an order and close all KOTs
+      if (generateFinalBill) {
+        const orderData = {
+          roomId: selectedRoom,
+          tableId: selectedTable,
+          kotIds: kots.map((kot) => kot._id),
+          products: items.map((item) => ({
+            productId: item.product._id,
+            quantity: item.quantity,
+            price: item.product.price,
+          })),
+          discount: {
+            type: "percentage",
+            value: parseFloat(companyInfo.discount) || 0,
+            reason: "Standard discount",
+          },
+          paymentMethod,
+        };
+
+        await axiosInstance.post("/order/add", orderData, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
+        });
+
+        await axiosInstance.put(`/kot/close/${selectedTable}`, {}, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
+        });
+
+        await fetchData();
+      }
+
+      setBillData({
+        kots,
+        items,
+        totalAmount,
+        paymentMethod,
       });
 
-      // Refresh rooms to update table status
-      await fetchData();
+      setShowBill(true);
+    } catch (error) {
+      console.error("Error fetching KOTs for bill:", error);
+      alert("Failed to generate bill");
     }
-
-    setBillData({ 
-      kots,
-      items,
-      totalAmount
-    });
-
-    setShowBill(true);
-  } catch (error) {
-    console.error("Error fetching KOTs for bill:", error);
-    alert("Failed to generate bill");
-  }
-};
+  };
 
   // Handle printing KOT
   const handlePrintKOT = (kot) => {
-    const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
+    const printWindow = window.open("", "_blank", "width= FonteynPro800,height=1000,scrollbars=yes,resizable=yes");
     if (!printWindow) {
       alert("Pop-up blocked! Please allow pop-ups to print KOT.");
       return;
     }
 
-    const qrData = `KOT:${kot.kotNumber},TABLE:${rooms.find((r) => r._id === kot.roomId)?.tables.find((t) => t._id === kot.tableId)?.tableNumber || 'N/A'}`;
-    
+    const qrData = `KOT:${kot.kotNumber},TABLE:${rooms.find((r) => r._id === kot.roomId)?.tables.find((t) => t._id === kot.tableId)?.tableNumber || "N/A"}`;
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -191,9 +192,10 @@ const POSPage = () => {
           </div>
           <div class="kot-details">
             <p><strong>KOT:</strong> <span>${kot.kotNumber}</span></p>
-            <p><strong>Room:</strong> <span>${rooms.find((r) => r._id === kot.roomId)?.roomName || 'N/A'}</span></p>
-            <p><strong>Table:</strong> <span>${rooms.find((r) => r._id === kot.roomId)?.tables.find((t) => t._id === kot.tableId)?.tableNumber || 'N/A'}</span></p>
+            <p><strong>Room:</strong> <span>${rooms.find((r) => r._id === kot.roomId)?.roomName || "N/A"}</span></p>
+            <p><strong>Table:</strong> <span>${rooms.find((r) => r._id === kot.roomId)?.tables.find((t) => t._id === kot.tableId)?.tableNumber || "N/A"}</span></p>
             <p><strong>Time:</strong> <span>${new Date(kot.createdAt).toLocaleTimeString()}</span></p>
+            <p><strong>Cashier:</strong> <span>${userName || "N/A"}</span></p>
           </div>
           <table>
             <thead>
@@ -204,13 +206,17 @@ const POSPage = () => {
               </tr>
             </thead>
             <tbody>
-              ${kot.orderItems.map((item) => `
+              ${kot.orderItems
+                .map(
+                  (item) => `
                 <tr>
                   <td>${item.product.name}</td>
                   <td>${item.quantity}</td>
-                  <td>${item.specialInstructions || '-'}</td>
+                  <td>${item.specialInstructions || "-"}</td>
                 </tr>
-              `).join('')}
+              `
+                )
+                .join("")}
             </tbody>
           </table>
           <div class="qr-container" id="qrcode"></div>
@@ -283,10 +289,11 @@ const POSPage = () => {
           <div class="invoice-details">
             <p><strong>Invoice:</strong> <span>${invoiceNum}</span></p>
             <p><strong>Date:</strong> <span>${new Date().toLocaleDateString()}</span></p>
-            <p><strong>Time:</strong> <span>${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></p>
-            <p><strong>Cashier:</strong> <span>${userName || 'Admin'}</span></p>
-            <p><strong>Room:</strong> <span>${rooms.find((r) => r._id === selectedRoom)?.roomName || 'N/A'}</span></p>
-            <p><strong>Table:</strong> <span>${rooms.find((r) => r._id === selectedRoom)?.tables.find((t) => t._id === selectedTable)?.tableNumber || 'N/A'}</span></p>
+            <p><strong>Time:</strong> <span>${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></p>
+            <p><strong>Cashier:</strong> <span>${userName || "Admin"}</span></p>
+            <p><strong>Room:</strong> <span>${rooms.find((r) => r._id === selectedRoom)?.roomName || "N/A"}</span></p>
+            <p><strong>Table:</strong> <span>${rooms.find((r) => r._id === selectedRoom)?.tables.find((t) => t._id === selectedTable)?.tableNumber || "N/A"}</span></p>
+            <p><strong>Payment Method:</strong> <span>${billData.paymentMethod.charAt(0).toUpperCase() + billData.paymentMethod.slice(1)}</span></p>
           </div>
           <table>
             <thead>
@@ -298,14 +305,18 @@ const POSPage = () => {
               </tr>
             </thead>
             <tbody>
-              ${billData.items.map((item) => `
+              ${billData.items
+                .map(
+                  (item) => `
                 <tr>
                   <td>${item.product.name}</td>
                   <td>${item.quantity}</td>
                   <td>₹${item.product.price.toFixed(2)}</td>
                   <td>₹${item.itemTotal.toFixed(2)}</td>
                 </tr>
-              `).join('')}
+              `
+                )
+                .join("")}
             </tbody>
           </table>
           <div class="summary-section">
@@ -560,8 +571,9 @@ const POSPage = () => {
                     <p className="font-semibold">Invoice #: {invoiceNum}</p>
                     <p className="text-gray-600">Date: {new Date().toLocaleDateString()}</p>
                     <p className="text-gray-600">Time: {new Date().toLocaleTimeString()}</p>
-                    <p className="text-gray-600">Room: {rooms.find((r) => r._id === selectedRoom)?.roomName || 'N/A'}</p>
-                    <p className="text-gray-600">Table: {rooms.find((r) => r._id === selectedRoom)?.tables.find((t) => t._id === selectedTable)?.tableNumber || 'N/A'}</p>
+                    <p className="text-gray-600">Room: {rooms.find((r) => r._id === selectedRoom)?.roomName || "N/A"}</p>
+                    <p className="text-gray-600">Table: {rooms.find((r) => r._id === selectedRoom)?.tables.find((t) => t._id === selectedTable)?.tableNumber || "N/A"}</p>
+                    <p className="text-gray-600">Payment Method: {billData.paymentMethod.charAt(0).toUpperCase() + billData.paymentMethod.slice(1)}</p>
                   </div>
                   <div>
                     <p className="text-gray-600">Cashier: {userName}</p>
@@ -656,16 +668,25 @@ const POSPage = () => {
           <div className="p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-2xl font-bold text-gray-800">Select a Table</h2>
-              <motion.button
-                onClick={fetchData}
-                disabled={refreshingRooms}
-                className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 transition-colors"
-                whileHover={{ rotate: 180 }}
-                whileTap={{ scale: 0.9 }}
-              >
-                <RefreshCw size={18} className={refreshingRooms ? "animate-spin" : ""} />
-                <span>Refresh</span>
-              </motion.button>
+              <div className="flex items-center gap-3">
+                <Link
+                  to="/admin-dashboard/active-kots"
+                  className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 transition-colors"
+                >
+                  <MapPin size={18} />
+                  <span>Active KOTs</span>
+                </Link>
+                <motion.button
+                  onClick={fetchData}
+                  disabled={refreshingRooms}
+                  className="flex items-center gap-2 bg-blue-50 text-blue-600 px-4 py-2 rounded-lg hover:bg-blue-100 transition-colors"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <RefreshCw size={18} />
+                  <span>Refresh</span>
+                </motion.button>
+              </div>
             </div>
             <div className="space-y-6">
               {rooms.map((room) => (
@@ -677,32 +698,36 @@ const POSPage = () => {
                         key={table._id}
                         onClick={() => handleTableSelect(room._id, table._id)}
                         className={`p-4 border-2 rounded-xl transition-all ${
-                          table.status !== 'available'
-                            ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50'
-                            : 'border-gray-200 hover:border-blue-300 hover:shadow-sm cursor-pointer'
+                          table.status !== "available"
+                            ? "opacity-50 cursor-not-allowed border-gray-200 bg-gray-50"
+                            : "border-gray-200 hover:border-blue-300 hover:shadow-sm cursor-pointer"
                         }`}
-                        whileHover={table.status === 'available' ? { scale: 1.02 } : {}}
-                        whileTap={table.status === 'available' ? { scale: 0.98 } : {}}
+                        whileHover={table.status === "available" ? { scale: 1.02 } : {}}
+                        whileTap={table.status === "available" ? { scale: 0.98 } : {}}
                       >
                         <div className="space-y-2">
                           <div className="flex justify-between items-start">
                             <div className="flex items-center gap-2">
-                              <span className="text-2xl">{table.tableType === 'booth' ? '🛋️' : table.tableType === 'high-top' ? '🍸' : table.tableType === 'outdoor' ? '🌳' : '🍽️'}</span>
+                              <span className="text-2xl">
+                                {table.tableType === "booth" ? "🛋️" : table.tableType === "high-top" ? "🍸" : table.tableType === "outdoor" ? "🌳" : "🍽️"}
+                              </span>
                               <div>
                                 <h4 className="font-semibold text-gray-800">Table {table.tableNumber}</h4>
                                 <p className="text-sm text-gray-600">{table.tableType}</p>
                               </div>
                             </div>
-                            <div className={`px-2 py-1 rounded-full text-xs font-medium border ${
-                              table.status === 'available' 
-                                ? 'bg-green-100 text-green-800 border-green-200' 
-                                : table.status === 'occupied'
-                                ? 'bg-red-100 text-red-800 border-red-200'
-                                : table.status === 'reserved'
-                                ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
-                                : 'bg-gray-100 text-gray-800 border-gray-200'
-                            }`}>
-                              {table.status === 'occupied' ? 'KOT Running (Occupied)' : table.status}
+                            <div
+                              className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                                table.status === "available"
+                                  ? "bg-green-100 text-green-800 border-green-200"
+                                  : table.status === "occupied"
+                                  ? "bg-red-100 text-red-800 border-red-200"
+                                  : table.status === "reserved"
+                                  ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                                  : "bg-gray-100 text-gray-800 border-gray-200"
+                              }`}
+                            >
+                              {table.status === "occupied" ? "KOT Running (Occupied)" : table.status}
                             </div>
                           </div>
                           <div className="flex items-center gap-1 text-sm text-gray-600">
