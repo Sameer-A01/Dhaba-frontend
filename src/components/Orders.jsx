@@ -2,22 +2,15 @@ import React, { useState, useEffect } from 'react';
 import axiosInstance from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { 
-  FiPackage, 
-  FiUser, 
-  FiMapPin, 
-  FiCalendar, 
-  FiDollarSign, 
-  FiFilter, 
-  FiSearch, 
-  FiChevronDown, 
-  FiChevronUp, 
-  FiPrinter,
-  FiTrendingUp,
-  FiMoreVertical
+  FiPackage, FiUser, FiMapPin, FiCalendar, FiDollarSign, 
+  FiFilter, FiSearch, FiChevronDown, FiChevronUp, 
+  FiPrinter, FiTrendingUp, FiList, FiClock, 
+  FiCheckCircle, FiXCircle, FiRefreshCw 
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'react-toastify'; // Assuming you have react-toastify for notifications
 
-// Helper functions outside component
+// Helper functions (unchanged from original)
 const calculateTodaySales = (orders) => {
   const today = new Date().toISOString().split('T')[0];
   return orders.reduce((total, order) => {
@@ -64,35 +57,69 @@ const formatRupee = (amount) => {
   }).format(amount).replace('₹', '₹ ');
 };
 
+const getKOTStatusBadge = (status) => {
+  switch (status) {
+    case 'preparing':
+      return { color: 'bg-yellow-100 text-yellow-800', icon: <FiClock className="mr-1" /> };
+    case 'ready':
+      return { color: 'bg-green-100 text-green-800', icon: <FiCheckCircle className="mr-1" /> };
+    case 'closed':
+      return { color: 'bg-gray-100 text-gray-800', icon: <FiXCircle className="mr-1" /> };
+    default:
+      return { color: 'bg-blue-100 text-blue-800', icon: <FiList className="mr-1" /> };
+  }
+};
+
 const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortConfig, setSortConfig] = useState({ key: 'orderDate', direction: 'desc' });
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const { user } = useAuth();
+  const [error, setError] = useState(null);
+
+  const fetchOrders = async (retryCount = 0) => {
+    try {
+      setLoading(true);
+      const response = await axiosInstance.get(`/order/${user.userId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('ims_token')}` },
+      });
+      if (response.data.success) {
+        setOrders(response.data.orders || []);
+        setError(null);
+      } else {
+        throw new Error(response.data.error || 'Failed to fetch orders');
+      }
+    } catch (err) {
+      console.error("Error fetching orders:", err);
+      if (retryCount < 3) {
+        setTimeout(() => fetchOrders(retryCount + 1), 2000); // Retry after 2 seconds
+      } else {
+        setError('Failed to fetch orders after multiple attempts. Please try again later.');
+        toast.error('Failed to fetch orders. Please check your connection.');
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchOrders = async () => {
-      setLoading(true);
-      try {
-        const response = await axiosInstance.get(`/order/${user.userId}`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('ims_token')}`,
-          },
-        });
-        if (response.data.success) {
-          setOrders(response.data.orders);
-        }
-      } catch (err) {
-        console.error("Error fetching orders:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchOrders();
+    // Set up polling for real-time updates
+    const interval = setInterval(() => {
+      fetchOrders();
+    }, 30000); // Poll every 30 seconds
+    return () => clearInterval(interval); // Cleanup on unmount
   }, [user.userId]);
+
+  const refreshOrders = () => {
+    setRefreshing(true);
+    fetchOrders();
+  };
 
   const requestSort = (key) => {
     let direction = 'asc';
@@ -106,12 +133,24 @@ const Orders = () => {
     let sortableOrders = [...orders];
     if (sortConfig.key) {
       sortableOrders.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-          return sortConfig.direction === 'asc' ? -1 : 1;
+        let aValue, bValue;
+        if (sortConfig.key.includes('.')) {
+          const keys = sortConfig.key.split('.');
+          aValue = keys.reduce((obj, key) => obj?.[key] || '', a);
+          bValue = keys.reduce((obj, key) => obj?.[key] || '', b);
+        } else if (sortConfig.key === 'kots.length') {
+          aValue = (a.kots || []).length;
+          bValue = (b.kots || []).length;
+        } else {
+          aValue = a[sortConfig.key] || '';
+          bValue = b[sortConfig.key] || '';
         }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-          return sortConfig.direction === 'asc' ? 1 : -1;
-        }
+
+        if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+        if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
         return 0;
       });
     }
@@ -120,15 +159,17 @@ const Orders = () => {
 
   const filteredOrders = sortedOrders.filter(order => {
     const searchContent = `${order.user?.name || ''} ${order.user?.address || ''} ${
-      order.products.map(p => p.product?.name || '').join(' ')
-    } ${order.orderDate || ''}`.toLowerCase();
+      order.products?.map(p => p.product?.name || '').join(' ')
+    } ${order.orderDate || ''} ${
+      order.kots?.map(k => k.kotNumber || '').join(' ')
+    }`.toLowerCase();
     return searchContent.includes(searchTerm.toLowerCase());
   });
 
   const totalOrderValue = orders.reduce((total, order) => {
-    return total + order.products.reduce((orderTotal, item) => {
-      return orderTotal + (item.price * item.quantity);
-    }, 0);
+    return total + (order.products?.reduce((orderTotal, item) => {
+      return orderTotal + ((item.price || 0) * (item.quantity || 0));
+    }, 0) || 0);
   }, 0);
 
   const toggleOrderExpansion = (orderId) => {
@@ -148,6 +189,9 @@ const Orders = () => {
             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
             th { background-color: #f2f2f2; }
             .total { font-weight: bold; margin-top: 20px; }
+            .kot-section { margin-top: 30px; border-top: 1px dashed #333; padding-top: 15px; }
+            .kot-header { font-weight: bold; margin-bottom: 5px; }
+            .status-badge { display: inline-block; padding: 2px 6px; border-radius: 12px; font-size: 12px; }
           </style>
         </head>
         <body>
@@ -167,21 +211,60 @@ const Orders = () => {
               </tr>
             </thead>
             <tbody>
-              ${order.products.map(item => `
+              ${order.products?.map(item => `
                 <tr>
                   <td>${item.product?.name || 'N/A'}</td>
                   <td>${item.product?.category?.name || 'N/A'}</td>
-                  <td>${item.quantity}</td>
+                  <td>${item.quantity || 0}</td>
                   <td>${formatRupee(item.price || 0)}</td>
-                  <td>${formatRupee((item.price || 0) * item.quantity)}</td>
+                  <td>${formatRupee((item.price || 0) * (item.quantity || 0))}</td>
                 </tr>
-              `).join('')}
+              `).join('') || '<tr><td colspan="5">No products</td></tr>'}
             </tbody>
           </table>
           
           <div class="total">
-            <p>Order Total: ${formatRupee(order.products.reduce((total, item) => total + (item.price * item.quantity), 0))}</p>
+            <p>Order Total: ${formatRupee(order.products?.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0) || 0)}</p>
           </div>
+
+          ${order.kots && order.kots.length > 0 ? `
+            <div class="kot-section">
+              <h2>KOT Details</h2>
+              ${order.kots.map(kot => {
+                const statusBadge = getKOTStatusBadge(kot.status);
+                return `
+                  <div class="kot-details" style="margin-bottom: 15px;">
+                    <div class="kot-header">
+                      <span style="font-weight: bold;">${kot.kotNumber || 'N/A'}</span>
+                      <span class="status-badge ${statusBadge.color}">
+                        ${statusBadge.icon}
+                        ${kot.status || 'Unknown'}
+                      </span>
+                    </div>
+                    <p><strong>Created:</strong> ${new Date(kot.createdAt).toLocaleString()}</p>
+                    <table style="margin-top: 5px;">
+                      <thead>
+                        <tr>
+                          <th>Item</th>
+                          <th>Qty</th>
+                          <th>Price</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${kot.orderItems?.map(item => `
+                          <tr>
+                            <td>${item.product?.name || 'N/A'}</td>
+                            <td>${item.quantity || 0}</td>
+                            <td>${formatRupee(item.product?.price || 0)}</td>
+                          </tr>
+                        `).join('') || '<tr><td colspan="3">No items</td></tr>'}
+                      </tbody>
+                    </table>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : '<p>No KOTs associated</p>'}
         </body>
       </html>
     `);
@@ -226,7 +309,7 @@ const Orders = () => {
           <div>
             <p className="text-gray-500">Total</p>
             <p className="font-medium text-green-600">
-              {formatRupee(order.products.reduce((total, item) => total + (item.price * item.quantity), 0))}
+              {formatRupee(order.products?.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0) || 0)}
             </p>
           </div>
           
@@ -246,7 +329,12 @@ const Orders = () => {
           
           <div>
             <p className="text-gray-500">Items</p>
-            <p className="font-medium">{order.products.length} item{order.products.length !== 1 ? 's' : ''}</p>
+            <p className="font-medium">{order.products?.length || 0} item{(order.products?.length || 0) !== 1 ? 's' : ''}</p>
+          </div>
+
+          <div>
+            <p className="text-gray-500">KOTs</p>
+            <p className="font-medium">{order.kots?.length || 0} KOT{(order.kots?.length || 0) !== 1 ? 's' : ''}</p>
           </div>
         </div>
         
@@ -261,25 +349,66 @@ const Orders = () => {
             >
               <h5 className="font-medium text-gray-800 mb-2">Order Details</h5>
               <div className="space-y-3">
-                {order.products.map((item, index) => (
+                {order.products?.map((item, index) => (
                   <div key={index} className="flex justify-between items-center border-b border-gray-100 pb-2">
                     <div>
                       <p className="font-medium text-gray-800">{item.product?.name || 'N/A'}</p>
                       <p className="text-sm text-gray-500">{item.product?.category?.name || 'N/A'}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm text-gray-600">{item.quantity} × {formatRupee(item.price || 0)}</p>
-                      <p className="font-medium text-gray-800">{formatRupee((item.price || 0) * item.quantity)}</p>
+                      <p className="text-sm text-gray-600">{item.quantity || 0} × {formatRupee(item.price || 0)}</p>
+                      <p className="font-medium text-gray-800">{formatRupee((item.price || 0) * (item.quantity || 0))}</p>
                     </div>
                   </div>
-                ))}
+                )) || <p>No products</p>}
                 <div className="flex justify-between items-center pt-2">
                   <p className="font-medium text-gray-800">Order Total</p>
                   <p className="font-bold text-lg text-green-600">
-                    {formatRupee(order.products.reduce((total, item) => total + (item.price * item.quantity), 0))}
+                    {formatRupee(order.products?.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0) || 0)}
                   </p>
                 </div>
               </div>
+
+              {order.kots && order.kots.length > 0 ? (
+                <div className="mt-4">
+                  <h5 className="font-medium text-gray-800 mb-2">KOT Details</h5>
+                  <div className="space-y-2">
+                    {order.kots.map((kot, idx) => {
+                      const statusBadge = getKOTStatusBadge(kot.status);
+                      return (
+                        <div key={idx} className="border border-gray-200 rounded p-3">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="font-medium flex items-center">
+                                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded mr-2">
+                                  {kot.kotNumber || 'N/A'}
+                                </span>
+                                <span className={`text-xs px-2 py-1 rounded flex items-center ${statusBadge.color}`}>
+                                  {statusBadge.icon}
+                                  {kot.status || 'Unknown'}
+                                </span>
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                {new Date(kot.createdAt).toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="mt-2 text-sm">
+                            {kot.orderItems?.map((item, i) => (
+                              <div key={i} className="flex justify-between py-1 border-b border-gray-100 last:border-0">
+                                <span>{item.product?.name || 'N/A'}</span>
+                                <span>{item.quantity || 0} × {formatRupee(item.product?.price || 0)}</span>
+                              </div>
+                            )) || <p>No items</p>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm text-gray-500">No KOTs associated</p>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -289,14 +418,35 @@ const Orders = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
+      {error && (
+        <div className="mb-4 p-4 bg-red-100 text-red-800 rounded-lg">
+          {error}
+          <button 
+            onClick={refreshOrders}
+            className="ml-4 text-blue-600 hover:underline"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <div className="flex flex-col mb-6 gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">
-            {user.role === 'admin' ? 'Order Management' : 'My Orders'}
-          </h1>
-          <p className="text-gray-600 text-sm">
-            {user.role === 'admin' ? 'View and manage all orders' : 'Track your order history'}
-          </p>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-800">
+              {user.role === 'admin' ? 'Order Management' : 'My Orders'}
+            </h1>
+            <p className="text-gray-600 text-sm">
+              {user.role === 'admin' ? 'View and manage all orders with KOT details' : 'Track your order history'}
+            </p>
+          </div>
+          <button 
+            onClick={refreshOrders}
+            disabled={refreshing}
+            className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
+            title="Refresh orders"
+          >
+            <FiRefreshCw className={refreshing ? "animate-spin" : ""} size={18} />
+          </button>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 w-full">
@@ -306,7 +456,7 @@ const Orders = () => {
             </div>
             <input
               type="text"
-              placeholder="Search orders..."
+              placeholder="Search orders or KOTs..."
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -354,6 +504,15 @@ const Orders = () => {
                     Cashier {sortConfig.key === 'user.name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                   </button>
                 )}
+                <button 
+                  className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                  onClick={() => {
+                    requestSort('kots.length');
+                    setIsFilterMenuOpen(false);
+                  }}
+                >
+                  KOT Count {sortConfig.key === 'kots.length' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
+                </button>
               </div>
             )}
           </div>
@@ -419,6 +578,14 @@ const Orders = () => {
         ) : (
           <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8 text-center">
             <p className="text-gray-500">No orders found</p>
+            {searchTerm && (
+              <button 
+                onClick={() => setSearchTerm('')}
+                className="mt-2 text-blue-600 text-sm hover:underline"
+              >
+                Clear search
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -487,6 +654,9 @@ const Orders = () => {
                   Items
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  KOTs
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Total
                 </th>
                 <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -497,7 +667,7 @@ const Orders = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={user.role === 'admin' ? 7 : 5} className="px-6 py-4 text-center">
+                  <td colSpan={user.role === 'admin' ? 8 : 6} className="px-6 py-4 text-center">
                     <div className="flex justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
                     </div>
@@ -527,10 +697,13 @@ const Orders = () => {
                         {new Date(order.orderDate).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {order.products.length} item{order.products.length !== 1 ? 's' : ''}
+                        {order.products?.length || 0} item{(order.products?.length || 0) !== 1 ? 's' : ''}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {order.kots?.length || 0} KOT{(order.kots?.length || 0) !== 1 ? 's' : ''}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                        {formatRupee(order.products.reduce((total, item) => total + (item.price * item.quantity), 0))}
+                        {formatRupee(order.products?.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0) || 0)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button 
@@ -562,29 +735,66 @@ const Orders = () => {
                           transition={{ duration: 0.3 }}
                           className="bg-gray-50"
                         >
-                          <td colSpan={user.role === 'admin' ? 7 : 5} className="px-6 py-4">
+                          <td colSpan={user.role === 'admin' ? 8 : 6} className="px-6 py-4">
                             <div className="bg-white rounded-lg shadow-xs p-4">
                               <h4 className="font-medium text-gray-800 mb-3">Order Details</h4>
                               <div className="space-y-3">
-                                {order.products.map((item, index) => (
+                                {order.products?.map((item, index) => (
                                   <div key={index} className="flex justify-between items-center border-b border-gray-100 pb-2">
                                     <div>
                                       <p className="font-medium text-gray-800">{item.product?.name || 'N/A'}</p>
                                       <p className="text-sm text-gray-500">{item.product?.category?.name || 'N/A'}</p>
                                     </div>
                                     <div className="text-right">
-                                      <p className="text-sm text-gray-600">{item.quantity} × {formatRupee(item.price || 0)}</p>
-                                      <p className="font-medium text-gray-800">{formatRupee((item.price || 0) * item.quantity)}</p>
+                                      <p className="text-sm text-gray-600">{item.quantity || 0} × {formatRupee(item.price || 0)}</p>
+                                      <p className="font-medium text-gray-800">{formatRupee((item.price || 0) * (item.quantity || 0))}</p>
                                     </div>
                                   </div>
-                                ))}
+                                )) || <p>No products</p>}
                                 <div className="flex justify-between items-center pt-2 border-t border-gray-200">
                                   <p className="font-medium text-gray-800">Order Total</p>
                                   <p className="font-bold text-lg text-green-600">
-                                    {formatRupee(order.products.reduce((total, item) => total + (item.price * item.quantity), 0))}
+                                    {formatRupee(order.products?.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0) || 0)}
                                   </p>
                                 </div>
                               </div>
+
+                              {order.kots && order.kots.length > 0 ? (
+                                <div className="mt-6">
+                                  <h4 className="font-medium text-gray-800 mb-3">KOT Details</h4>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {order.kots.map((kot, idx) => {
+                                      const statusBadge = getKOTStatusBadge(kot.status);
+                                      return (
+                                        <div key={idx} className="border border-gray-200 rounded-lg p-3">
+                                          <div className="flex justify-between items-center mb-2">
+                                            <span className="font-medium">{kot.kotNumber || 'N/A'}</span>
+                                            <span className={`text-xs px-2 py-1 rounded flex items-center ${statusBadge.color}`}>
+                                              {statusBadge.icon}
+                                              {kot.status || 'Unknown'}
+                                            </span>
+                                          </div>
+                                          <div className="text-sm text-gray-600 mb-3">
+                                            Created: {new Date(kot.createdAt).toLocaleString()}
+                                          </div>
+                                          <div className="space-y-2">
+                                            {kot.orderItems?.map((item, i) => (
+                                              <div key={i} className="flex justify-between items-center text-sm py-1 border-b border-gray-100 last:border-0">
+                                                <span className="font-medium">{item.product?.name || 'N/A'}</span>
+                                                <span className="text-gray-600">
+                                                  {item.quantity || 0} × {formatRupee(item.product?.price || 0)}
+                                                </span>
+                                              </div>
+                                            )) || <p>No items</p>}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="mt-4 text-sm text-gray-500">No KOTs associated</p>
+                              )}
                             </div>
                           </td>
                         </motion.tr>
@@ -594,8 +804,16 @@ const Orders = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={user.role === 'admin' ? 7 : 5} className="px-6 py-4 text-center text-sm text-gray-500">
-                    No orders found
+                  <td colSpan={user.role === 'admin' ? 8 : 6} className="px-6 py-4 text-center text-sm text-gray-500">
+                    <p>No orders found</p>
+                    {searchTerm && (
+                      <button 
+                        onClick={() => setSearchTerm('')}
+                        className="mt-2 text-blue-600 text-sm hover:underline"
+                      >
+                        Clear search
+                      </button>
+                    )}
                   </td>
                 </tr>
               )}

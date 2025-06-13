@@ -112,28 +112,35 @@ const Categories = () => {
     });
   };
 
-  const handleDelete = async () => {
-    try {
-      const response = await axiosInstance.delete(`/category/${deleteConfirmation.id}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("ims_token")}`,
-        },
-      });
-      if (response.data.success) {
-        toast.success('Category deleted successfully');
-        setCategories((prev) => prev.filter((category) => category._id !== deleteConfirmation.id));
-        setFilteredCategories((prev) => prev.filter((category) => category._id !== deleteConfirmation.id));
-        closeDeleteConfirmation();
-      }
-    } catch (error) {
-      if (error.response) {
-        toast.error(error.response.data.error || 'Failed to delete');
-      } else {
-        toast.error(error.message || 'Failed to delete');
-      }
+ const handleDelete = async () => {
+  try {
+    const response = await axiosInstance.delete(`/category/${deleteConfirmation.id}`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("ims_token")}`,
+      },
+    });
+    if (response.data.success) {
+      toast.success('Category deleted successfully');
+      setCategories((prev) => prev.filter((category) => category._id !== deleteConfirmation.id));
+      setFilteredCategories((prev) => prev.filter((category) => category._id !== deleteConfirmation.id));
       closeDeleteConfirmation();
-    } 
-  };
+    }
+  } catch (error) {
+    if (error.response) {
+      // Show more detailed error message
+      toast.error(error.response.data.error || 
+                 error.response.data.message || 
+                 'Failed to delete category');
+      // Log additional info for debugging
+      if (error.response.data.associatedProducts) {
+        console.log('Associated products:', error.response.data.associatedProducts);
+      }
+    } else {
+      toast.error(error.message || 'Failed to delete category');
+    }
+    closeDeleteConfirmation();
+  } 
+};
 
   const handleEdit = (category) => {
     setEditingId(category._id);

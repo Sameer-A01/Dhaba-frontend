@@ -78,52 +78,76 @@ const POSPage = () => {
   };
 
   // Handle adding KOT items to bill
-  const handleAddToBill = async (kot = null, generateFinalBill = false) => {
-    try {
-      const response = await axiosInstance.get(`/kot?tableId=${selectedTable}&status=preparing,ready`);
-      const kots = response.data.kots;
+ const handleAddToBill = async (kot = null, generateFinalBill = false) => {
+  try {
+    const response = await axiosInstance.get(`/kot?tableId=${selectedTable}&status=preparing,ready`);
+    const kots = response.data.kots;
 
-      // Aggregate items across all KOTs
-      const itemMap = new Map();
-      kots.forEach((kot) => {
-        kot.orderItems.forEach((item) => {
-          const product = products.find((p) => p._id === (item.product?._id || item.product));
-          if (product) {
-            const key = product._id;
-            const existing = itemMap.get(key) || { product, quantity: 0, itemTotal: 0 };
-            itemMap.set(key, {
-              product,
-              quantity: existing.quantity + item.quantity,
-              itemTotal: existing.itemTotal + (product.price * item.quantity)
-            });
-          }
-        });
+    // Aggregate items across all KOTs
+    const itemMap = new Map();
+    kots.forEach((kot) => {
+      kot.orderItems.forEach((item) => {
+        const product = products.find((p) => p._id === (item.product?._id || item.product));
+        if (product) {
+          const key = product._id;
+          const existing = itemMap.get(key) || { product, quantity: 0, itemTotal: 0 };
+          itemMap.set(key, {
+            product,
+            quantity: existing.quantity + item.quantity,
+            itemTotal: existing.itemTotal + (product.price * item.quantity)
+          });
+        }
+      });
+    });
+
+    const items = Array.from(itemMap.values());
+    const totalAmount = items.reduce((sum, item) => sum + item.itemTotal, 0);
+
+    // If generating final bill, create an order and close all KOTs
+    if (generateFinalBill) {
+      // Prepare order data
+      const orderData = {
+        roomId: selectedRoom,
+        tableId: selectedTable,
+        kotIds: kots.map(kot => kot._id),
+        products: items.map(item => ({
+          productId: item.product._id,
+          quantity: item.quantity,
+          price: item.product.price
+        })),
+        discount: {
+          type: 'percentage',
+          value: parseFloat(companyInfo.discount) || 0,
+          reason: 'Standard discount'
+        }
+      };
+
+      // Create the order
+      const orderResponse = await axiosInstance.post('/order/add', orderData, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
       });
 
-      const items = Array.from(itemMap.values());
-      const totalAmount = items.reduce((sum, item) => sum + item.itemTotal, 0);
-
-      // If generating final bill, close all KOTs
-      if (generateFinalBill) {
-        await axiosInstance.put(`/kot/close/${selectedTable}`, {}, {
-          headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
-        });
-        // Refresh rooms to update table status
-        await fetchData();
-      }
-
-      setBillData({ 
-        kots,
-        items,
-        totalAmount
+      // Close all KOTs
+      await axiosInstance.put(`/kot/close/${selectedTable}`, {}, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
       });
 
-      setShowBill(true);
-    } catch (error) {
-      console.error("Error fetching KOTs for bill:", error);
-      alert("Failed to generate bill");
+      // Refresh rooms to update table status
+      await fetchData();
     }
-  };
+
+    setBillData({ 
+      kots,
+      items,
+      totalAmount
+    });
+
+    setShowBill(true);
+  } catch (error) {
+    console.error("Error fetching KOTs for bill:", error);
+    alert("Failed to generate bill");
+  }
+};
 
   // Handle printing KOT
   const handlePrintKOT = (kot) => {
