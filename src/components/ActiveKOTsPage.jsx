@@ -15,6 +15,8 @@ const ActiveKOTsPage = () => {
     address: localStorage.getItem("company_address") || "Purvanchal Highway Road, UP, Azamgarh 276001",
     phone: localStorage.getItem("company_phone") || "+91-7398549531",
   });
+   const user = JSON.parse(localStorage.getItem("ims_user"));
+  const userName = user?.name;
 
   // Fetch rooms and active KOTs
   const fetchData = async (isRefresh = false) => {
@@ -112,6 +114,8 @@ const ActiveKOTsPage = () => {
             <p><strong>Room:</strong> <span>${rooms.find((r) => r._id === kot.roomId)?.roomName || "N/A"}</span></p>
             <p><strong>Table:</strong> <span>${rooms.find((r) => r._id === kot.roomId)?.tables.find((t) => t._id === kot.tableId)?.tableNumber || "N/A"}</span></p>
             <p><strong>Time:</strong> <span>${new Date(kot.createdAt).toLocaleTimeString()}</span></p>
+             <p><strong>Cashier:</strong> <span>${userName || "N/A"}</span></p>
+             
           </div>
           <table>
             <thead>
