@@ -768,7 +768,7 @@ const POSPage = () => {
                     </div>
                   </div>
                   <div className="text-center mt-8 text-gray-500">
-                    <p>Thank you for your business!</p>
+                    <p>Thank you for visiting!</p>
                   </div>
                 </div>
                 <div className="mt-6 flex flex-col sm:flex-row justify-end gap-3">
