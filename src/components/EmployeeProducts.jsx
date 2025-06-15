@@ -305,7 +305,6 @@ const handlePrintBill = () => {
   }
 
   const totalItems = billData.items.reduce((sum, item) => sum + item.quantity, 0);
-  const qrData = `INV:${invoiceNum},AMT:${calculateGrandTotal()},COMP:${companyInfo.name},ROOM:${rooms.find((r) => r._id === selectedRoom)?.roomName},TABLE:${rooms.find((r) => r._id === selectedRoom)?.tables.find((t) => t._id === selectedTable)?.tableNumber}`;
 
   printWindow.document.write(`
     <!DOCTYPE html>
@@ -332,7 +331,7 @@ const handlePrintBill = () => {
           padding: 1mm; 
           color: #000; 
           font-size: 12px; 
-          line-height: 1.2; 
+          line-height: 1.3; 
           width: 78mm; 
           background: white; 
           box-sizing: border-box;
@@ -346,33 +345,35 @@ const handlePrintBill = () => {
         .company-header { 
           text-align: center; 
           margin-bottom: 3mm; 
-          border-bottom: 1px solid #333; 
+          border-bottom: 1px solid #ddd; 
           padding-bottom: 2mm; 
         }
         
         .company-header h1 { 
           font-size: 16px; 
           margin: 0 0 1mm 0; 
-          font-weight: bold; 
-          text-transform: uppercase;
+          font-weight: 600; 
           letter-spacing: 0.5px;
+          color: #333;
         }
         
         .company-header p { 
           margin: 0.5mm 0; 
           font-size: 10px; 
-          font-weight: 500;
+          font-weight: 400;
+          color: #555;
         }
         
         .gst-number {
-          font-weight: bold;
+          font-weight: 500;
           font-size: 9px;
           margin-top: 1mm;
+          color: #555;
         }
         
         .invoice-details { 
           margin-bottom: 3mm; 
-          border-bottom: 1px dashed #333; 
+          border-bottom: 1px dashed #ddd; 
           padding-bottom: 2mm; 
         }
         
@@ -381,22 +382,22 @@ const handlePrintBill = () => {
           font-size: 10px; 
           display: flex; 
           justify-content: space-between; 
-          font-weight: 500;
+          font-weight: 400;
         }
         
         .invoice-details strong {
-          font-weight: bold;
+          font-weight: 500;
         }
         
         .items-header {
           text-align: center;
-          font-weight: bold;
-          font-size: 12px;
+          font-weight: 500;
+          font-size: 11px;
           margin: 2mm 0 1mm 0;
           padding: 1mm 0;
-          border-bottom: 1px solid #333;
-          text-transform: uppercase;
+          border-bottom: 1px solid #ddd;
           letter-spacing: 0.3px;
+          color: #333;
         }
         
         table { 
@@ -408,34 +409,34 @@ const handlePrintBill = () => {
         
         th { 
           text-align: left; 
-          font-weight: bold; 
-          border-bottom: 1px solid #333; 
+          font-weight: 500; 
+          border-bottom: 1px solid #ddd; 
           padding: 1mm 0.5mm; 
           font-size: 10px;
-          text-transform: uppercase;
+          color: #333;
         }
         
         td { 
           padding: 0.5mm; 
-          border-bottom: 1px dotted #ccc;
+          border-bottom: 1px dotted #eee;
           font-size: 9px;
-          font-weight: 500;
+          font-weight: 400;
         }
         
         .item-name {
-          font-weight: bold;
+          font-weight: 500;
           max-width: 25mm;
           word-wrap: break-word;
-          font-size: 8px;
+          font-size: 9px;
         }
         
         .qty-col, .price-col, .total-col {
           text-align: right;
-          font-weight: bold;
+          font-weight: 500;
         }
         
         .summary-section { 
-          border-top: 1px solid #333; 
+          border-top: 1px solid #ddd; 
           padding-top: 2mm; 
           margin-top: 2mm; 
         }
@@ -445,23 +446,23 @@ const handlePrintBill = () => {
           justify-content: space-between; 
           padding: 0.5mm 0; 
           font-size: 10px; 
-          font-weight: 500;
+          font-weight: 400;
         }
         
         .summary-row.subtotal {
-          border-top: 1px dotted #666;
+          border-top: 1px dotted #ddd;
           padding-top: 1mm;
           margin-top: 1mm;
         }
         
         .summary-row.total { 
-          font-weight: bold; 
+          font-weight: 500; 
           font-size: 12px; 
-          border-top: 1px solid #333; 
-          border-bottom: 1px solid #333;
+          border-top: 1px solid #ddd; 
+          border-bottom: 1px solid #ddd;
           margin-top: 1mm; 
           padding: 1.5mm 0; 
-          background: #f8f8f8;
+          background: #f9f9f9;
         }
         
         .total-items {
@@ -469,44 +470,35 @@ const handlePrintBill = () => {
           font-size: 10px;
           margin-top: 2mm;
           padding: 1mm;
-          background: #f0f0f0;
-          border: 1px solid #ddd;
-          font-weight: bold;
-        }
-        
-        .qr-container { 
-          display: flex; 
-          justify-content: center; 
-          margin: 2mm 0; 
-          min-height: 60px;
-          padding: 1mm;
-          border: 1px dashed #666;
+          background: #f9f9f9;
+          border: 1px solid #eee;
+          font-weight: 500;
         }
         
         .footer { 
           text-align: center; 
-          margin-top: 2mm; 
+          margin-top: 3mm; 
           font-size: 10px; 
           padding-top: 2mm; 
-          border-top: 1px solid #333; 
-          font-weight: bold;
-          font-style: italic;
+          border-top: 1px solid #ddd; 
+          font-weight: 400;
         }
         
         .footer p {
           margin: 0.5mm 0;
+          color: #555;
         }
         
         .thank-you {
           font-size: 11px;
           color: #333;
-          text-transform: uppercase;
           letter-spacing: 0.3px;
+          font-weight: 500;
         }
         
         /* Ensure good contrast for printing */
         .summary-row span:last-child {
-          font-weight: bold;
+          font-weight: 500;
         }
         
         /* Print-specific adjustments */
@@ -526,13 +518,8 @@ const handlePrintBill = () => {
           .company-header h1 {
             font-size: 14px;
           }
-          
-          .qr-container {
-            min-height: 50px;
-          }
         }
       </style>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     </head>
     <body>
       <div class="invoice-container">
@@ -607,33 +594,20 @@ const handlePrintBill = () => {
           Total Items: ${totalItems}
         </div>
         
-        <div class="qr-container" id="qrcode"></div>
-        
         <div class="footer">
-          <p class="thank-you">Thank You For Your Visit!</p>
-          <p>Please Come Again | Have a Great Day! 😊</p>
+          <p class="thank-you">Thank You For Your Visit</p>
+          <p>Please Come Again | Have a Great Day</p>
         </div>
       </div>
       
       <script>
-        // Wait for document to load completely
+        // Print immediately when loaded
         window.onload = function() {
-          // Generate QR Code
-          new QRCode(document.getElementById("qrcode"), {
-            text: "${qrData}",
-            width: 60,
-            height: 60,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.M
-          });
-          
-          // Print after QR code is generated
           setTimeout(() => {
             window.print();
             // Auto-close after printing (optional)
             setTimeout(() => window.close(), 1000);
-          }, 1500);
+          }, 500);
         };
       </script>
     </body>
