@@ -256,116 +256,317 @@ const POSPage = () => {
   };
 
   // Handle bill printing
-  const handlePrintBill = () => {
-    const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
-    if (!printWindow) {
-      alert("Pop-up blocked! Please allow pop-ups to print invoice.");
-      return;
-    }
+ const handlePrintBill = () => {
+  const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
+  if (!printWindow) {
+    alert("Pop-up blocked! Please allow pop-ups to print invoice.");
+    return;
+  }
 
-    const totalItems = billData.items.reduce((sum, item) => sum + item.quantity, 0);
-    const qrData = `INV:${invoiceNum},AMT:${calculateGrandTotal()},COMP:${companyInfo.name},ROOM:${rooms.find((r) => r._id === selectedRoom)?.roomName},TABLE:${rooms.find((r) => r._id === selectedRoom)?.tables.find((t) => t._id === selectedTable)?.tableNumber}`;
+  const totalItems = billData.items.reduce((sum, item) => sum + item.quantity, 0);
+  const qrData = `INV:${invoiceNum},AMT:${calculateGrandTotal()},COMP:${companyInfo.name},ROOM:${rooms.find((r) => r._id === selectedRoom)?.roomName},TABLE:${rooms.find((r) => r._id === selectedRoom)?.tables.find((t) => t._id === selectedTable)?.tableNumber}`;
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Invoice - ${companyInfo.name}</title>
-        <meta charset="UTF-8">
-        <style>
-          @page { size: 80mm 297mm; margin: 2mm; }
-          body { font-family: 'Courier New', monospace; margin: 0; padding: 5mm; color: #000; font-size: 12px; line-height: 1.3; width: 70mm; background: white; }
-          .invoice-container { max-width: 70mm; margin: 0 auto; }
-          .company-header { text-align: center; margin-bottom: 5mm; border-bottom: 1px dashed #333; padding-bottom: 3mm; }
-          .company-header h1 { font-size: 16px; margin: 0 0 2mm 0; font-weight: bold; }
-          .company-header p { margin: 1mm 0; font-size: 10px; }
-          .invoice-details { margin-bottom: 5mm; border-bottom: 1px dashed #333; padding-bottom: 3mm; }
-          .invoice-details p { margin: 1mm 0; font-size: 10px; display: flex; justify-content: space-between; }
-          table { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 3mm; }
-          th { text-align: left; font-weight: bold; border-bottom: 1px solid #333; padding: 1mm 0; }
-          td { padding: 0.5mm 0; }
-          .summary-section { border-top: 1px dashed #333; padding-top: 3mm; margin-top: 3mm; }
-          .summary-row { display: flex; justify-content: space-between; padding: 0.5mm 0; font-size: 10px; }
-          .summary-row.total { font-weight: bold; font-size: 12px; border-top: 1px solid #333; margin-top: 2mm; padding-top: 2mm; }
-          .footer { text-align: center; margin-top: 5mm; font-size: 9px; padding-top: 3mm; border-top: 1px dashed #333; }
-          .qr-container { display: flex; justify-content: center; margin: 3mm 0; min-height: 80px; }
-        </style>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-      </head>
-      <body>
-        <div class="invoice-container">
-          <div class="company-header">
-            <h1>${companyInfo.name}</h1>
-            <p>${companyInfo.address}</p>
-            <p>Tel: ${companyInfo.phone}</p>
-            <p>Email: ${companyInfo.email}</p>
-            <p>GST No: 09ABKFR9647R1ZV</p>
-          </div>
-          <div class="invoice-details">
-            <p><strong>Invoice:</strong> <span>${invoiceNum}</span></p>
-            <p><strong>Date:</strong> <span>${new Date().toLocaleDateString()}</span></p>
-            <p><strong>Time:</strong> <span>${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></p>
-            <p><strong>Cashier:</strong> <span>${userName || "Admin"}</span></p>
-            <p><strong>Room:</strong> <span>${rooms.find((r) => r._id === selectedRoom)?.roomName || "N/A"}</span></p>
-            <p><strong>Table:</strong> <span>${rooms.find((r) => r._id === selectedRoom)?.tables.find((t) => t._id === selectedTable)?.tableNumber || "N/A"}</span></p>
-            <p><strong>Payment Method:</strong> <span>${billData.paymentMethod.charAt(0).toUpperCase() + billData.paymentMethod.slice(1)}</span></p>
-          </div>
-          <table>
-            <thead>
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Invoice - ${companyInfo.name}</title>
+      <meta charset="UTF-8">
+      <style>
+        @page { 
+          size: 80mm auto; 
+          margin: 3mm 2mm; 
+        }
+        
+        @media print {
+          body { 
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+        
+        body { 
+          font-family: 'Arial', 'Helvetica', sans-serif; 
+          margin: 0; 
+          padding: 3mm; 
+          color: #000; 
+          font-size: 14px; 
+          line-height: 1.4; 
+          width: 74mm; 
+          background: white; 
+          box-sizing: border-box;
+        }
+        
+        .invoice-container { 
+          max-width: 74mm; 
+          margin: 0 auto; 
+        }
+        
+        .company-header { 
+          text-align: center; 
+          margin-bottom: 8mm; 
+          border-bottom: 2px double #333; 
+          padding-bottom: 4mm; 
+        }
+        
+        .company-header h1 { 
+          font-size: 20px; 
+          margin: 0 0 3mm 0; 
+          font-weight: bold; 
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        
+        .company-header p { 
+          margin: 1.5mm 0; 
+          font-size: 12px; 
+          font-weight: 500;
+        }
+        
+        .gst-number {
+          font-weight: bold;
+          font-size: 11px;
+          margin-top: 2mm;
+        }
+        
+        .invoice-details { 
+          margin-bottom: 6mm; 
+          border-bottom: 1px dashed #333; 
+          padding-bottom: 4mm; 
+        }
+        
+        .invoice-details p { 
+          margin: 1.5mm 0; 
+          font-size: 12px; 
+          display: flex; 
+          justify-content: space-between; 
+          font-weight: 500;
+        }
+        
+        .invoice-details strong {
+          font-weight: bold;
+        }
+        
+        .items-header {
+          text-align: center;
+          font-weight: bold;
+          font-size: 14px;
+          margin: 4mm 0 2mm 0;
+          padding: 2mm 0;
+          border-bottom: 1px solid #333;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        
+        table { 
+          width: 100%; 
+          border-collapse: collapse; 
+          font-size: 11px; 
+          margin-bottom: 4mm; 
+        }
+        
+        th { 
+          text-align: left; 
+          font-weight: bold; 
+          border-bottom: 2px solid #333; 
+          padding: 2mm 1mm; 
+          font-size: 12px;
+          text-transform: uppercase;
+        }
+        
+        td { 
+          padding: 1.5mm 1mm; 
+          border-bottom: 1px dotted #ccc;
+          font-size: 11px;
+          font-weight: 500;
+        }
+        
+        .item-name {
+          font-weight: bold;
+          max-width: 30mm;
+          word-wrap: break-word;
+        }
+        
+        .qty-col, .price-col, .total-col {
+          text-align: right;
+          font-weight: bold;
+        }
+        
+        .summary-section { 
+          border-top: 2px double #333; 
+          padding-top: 4mm; 
+          margin-top: 4mm; 
+        }
+        
+        .summary-row { 
+          display: flex; 
+          justify-content: space-between; 
+          padding: 1mm 0; 
+          font-size: 12px; 
+          font-weight: 500;
+        }
+        
+        .summary-row.subtotal {
+          border-top: 1px dotted #666;
+          padding-top: 2mm;
+          margin-top: 2mm;
+        }
+        
+        .summary-row.total { 
+          font-weight: bold; 
+          font-size: 16px; 
+          border-top: 2px solid #333; 
+          border-bottom: 2px solid #333;
+          margin-top: 3mm; 
+          padding: 3mm 0; 
+          background: #f8f8f8;
+        }
+        
+        .total-items {
+          text-align: center;
+          font-size: 12px;
+          margin-top: 3mm;
+          padding: 2mm;
+          background: #f0f0f0;
+          border: 1px solid #ddd;
+          font-weight: bold;
+        }
+        
+        .qr-container { 
+          display: flex; 
+          justify-content: center; 
+          margin: 5mm 0; 
+          min-height: 90px;
+          padding: 3mm;
+          border: 1px dashed #666;
+        }
+        
+        .footer { 
+          text-align: center; 
+          margin-top: 6mm; 
+          font-size: 12px; 
+          padding-top: 4mm; 
+          border-top: 2px double #333; 
+          font-weight: bold;
+          font-style: italic;
+        }
+        
+        .footer p {
+          margin: 2mm 0;
+        }
+        
+        .thank-you {
+          font-size: 14px;
+          color: #333;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        
+        /* Ensure good contrast for printing */
+        .summary-row span:last-child {
+          font-weight: bold;
+        }
+        
+        /* Print-specific adjustments */
+        @media print {
+          .invoice-container {
+            page-break-inside: avoid;
+          }
+          
+          .summary-section {
+            page-break-inside: avoid;
+          }
+        }
+      </style>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    </head>
+    <body>
+      <div class="invoice-container">
+        <div class="company-header">
+          <h1>${companyInfo.name}</h1>
+          <p>${companyInfo.address}</p>
+          <p>📞 ${companyInfo.phone}</p>
+          <p>✉️ ${companyInfo.email}</p>
+          <p class="gst-number">GST No: 09ABKFR9647R1ZV</p>
+        </div>
+        
+        <div class="invoice-details">
+          <p><strong>Invoice #:</strong> <span>${invoiceNum}</span></p>
+          <p><strong>Date:</strong> <span>${new Date().toLocaleDateString('en-IN')}</span></p>
+          <p><strong>Time:</strong> <span>${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></p>
+          <p><strong>Cashier:</strong> <span>${userName || "Admin"}</span></p>
+          <p><strong>Room:</strong> <span>${rooms.find((r) => r._id === selectedRoom)?.roomName || "N/A"}</span></p>
+          <p><strong>Table:</strong> <span>${rooms.find((r) => r._id === selectedRoom)?.tables.find((t) => t._id === selectedTable)?.tableNumber || "N/A"}</span></p>
+          <p><strong>Payment:</strong> <span>${billData.paymentMethod.charAt(0).toUpperCase() + billData.paymentMethod.slice(1)}</span></p>
+        </div>
+        
+        <div class="items-header">Order Details</div>
+        
+        <table>
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th class="qty-col">Qty</th>
+              <th class="price-col">Price</th>
+              <th class="total-col">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${billData.items
+              .map(
+                (item) => `
               <tr>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Price</th>
-                <th>Total</th>
+                <td class="item-name">${item.product.name}</td>
+                <td class="qty-col">${item.quantity}</td>
+                <td class="price-col">₹${item.product.price.toFixed(2)}</td>
+                <td class="total-col">₹${item.itemTotal.toFixed(2)}</td>
               </tr>
-            </thead>
-            <tbody>
-              ${billData.items
-                .map(
-                  (item) => `
-                <tr>
-                  <td>${item.product.name}</td>
-                  <td>${item.quantity}</td>
-                  <td>₹${item.product.price.toFixed(2)}</td>
-                  <td>₹${item.itemTotal.toFixed(2)}</td>
-                </tr>
-              `
-                )
-                .join("")}
-            </tbody>
-          </table>
-          <div class="summary-section">
-            <div class="summary-row">
-              <span>Subtotal:</span>
-              <span>₹${billData.totalAmount.toFixed(2)}</span>
-            </div>
-            <div class="summary-row">
-              <span>Discount (${companyInfo.discount}%):</span>
-              <span>-₹${calculateDiscount()}</span>
-            </div>
-            <div class="summary-row">
-              <span>Subtotal after Discount:</span>
-              <span>₹${calculateSubtotalAfterDiscount()}</span>
-            </div>
-            <div class="summary-row">
-              <span>GST (${companyInfo.taxRate}%):</span>
-              <span>₹${calculateTax()}</span>
-            </div>
-            <div class="summary-row total">
-              <span>GRAND TOTAL:</span>
-              <span>₹${calculateGrandTotal()}</span>
-            </div>
-            <div class="summary-row">
-              <span>Total Items:</span>
-              <span>${totalItems}</span>
-            </div>
+            `
+              )
+              .join("")}
+          </tbody>
+        </table>
+        
+        <div class="summary-section">
+          <div class="summary-row subtotal">
+            <span><strong>Subtotal:</strong></span>
+            <span>₹${billData.totalAmount.toFixed(2)}</span>
           </div>
-          <div class="qr-container" id="qrcode"></div>
-          <div class="footer">
-            <p>Thank you for visiting! Please visit again.</p>
+          <div class="summary-row">
+            <span>Discount (${companyInfo.discount}%):</span>
+            <span>- ₹${calculateDiscount()}</span>
+          </div>
+          <div class="summary-row">
+            <span>After Discount:</span>
+            <span>₹${calculateSubtotalAfterDiscount()}</span>
+          </div>
+          <div class="summary-row">
+            <span>GST (${companyInfo.taxRate}%):</span>
+            <span>₹${calculateTax()}</span>
+          </div>
+          <div class="summary-row total">
+            <span>GRAND TOTAL:</span>
+            <span>₹${calculateGrandTotal()}</span>
           </div>
         </div>
-        <script>
+        
+        <div class="total-items">
+          Total Items: ${totalItems}
+        </div>
+        
+        <div class="qr-container" id="qrcode"></div>
+        
+        <div class="footer">
+          <p class="thank-you">Thank You For Your Visit!</p>
+          <p>Please Come Again</p>
+          <p>Have a Great Day! 😊</p>
+        </div>
+      </div>
+      
+      <script>
+        // Wait for document to load completely
+        window.onload = function() {
+          // Generate QR Code
           new QRCode(document.getElementById("qrcode"), {
             text: "${qrData}",
             width: 80,
@@ -374,13 +575,20 @@ const POSPage = () => {
             colorLight: "#ffffff",
             correctLevel: QRCode.CorrectLevel.M
           });
-          setTimeout(() => window.print(), 1000);
-        </script>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
+          
+          // Print after QR code is generated
+          setTimeout(() => {
+            window.print();
+            // Auto-close after printing (optional)
+            setTimeout(() => window.close(), 1000);
+          }, 1500);
+        };
+      </script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+};
   // Calculate bill totals
   const calculateDiscount = () => {
     const discountPercent = parseFloat(companyInfo.discount) || 0;
