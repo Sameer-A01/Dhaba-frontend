@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '../utils/api';
-import { Printer, Plus, Minus, X, Utensils, Clock, CheckCircle, Trash2, ChevronDown, ChevronUp, User, Search, ArrowLeft } from 'lucide-react';
+import { Printer, Plus, Minus, X, Utensils, Clock, CheckCircle, Trash2, ChevronDown, ChevronUp, User, Search, ArrowLeft, AlertCircle, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import toast, { Toaster } from 'react-hot-toast';
 
 const KOTInterface = ({
   tableId,
@@ -34,7 +35,15 @@ const KOTInterface = ({
         setRunningKOTs(response.data.kots);
       } catch (error) {
         console.error('Error fetching KOTs:', error);
-        alert('Failed to fetch running KOTs');
+        toast.error('Unable to load running KOTs. Please try again.', {
+          icon: <AlertCircle className="text-red-500" size={20} />,
+          style: {
+            borderRadius: '10px',
+            background: '#fff',
+            color: '#333',
+            border: '1px solid #fee2e2',
+          },
+        });
       }
     };
 
@@ -46,7 +55,15 @@ const KOTInterface = ({
         setCategories([{ _id: 'all', name: 'All Categories' }, ...response.data.categories]);
       } catch (error) {
         console.error('Error fetching categories:', error);
-        alert('Failed to fetch categories');
+        toast.error('Unable to load categories. Please try again.', {
+          icon: <AlertCircle className="text-red-500" size={20} />,
+          style: {
+            borderRadius: '10px',
+            background: '#fff',
+            color: '#333',
+            border: '1px solid #fee2e2',
+          },
+        });
       }
     };
 
@@ -87,7 +104,15 @@ const KOTInterface = ({
 
   const handleSubmitKOT = async () => {
     if (kotItems.length === 0) {
-      alert('No items in KOT');
+      toast.error('No items added to KOT.', {
+        icon: <AlertCircle className="text-red-500" size={20} />,
+        style: {
+          borderRadius: '10px',
+          background: '#fff',
+          color: '#333',
+          border: '1px solid #fee2e2',
+        },
+      });
       return;
     }
 
@@ -115,10 +140,26 @@ const KOTInterface = ({
       setKotItems([]);
       setActiveTab('running-kots');
 
-      alert('KOT created successfully!');
+      toast.success('KOT created successfully!', {
+        icon: <Check className="text-green-500" size={20} />,
+        style: {
+          borderRadius: '10px',
+          background: '#fff',
+          color: '#333',
+          border: '1px solid #d1fae5',
+        },
+      });
     } catch (error) {
       console.error('Error creating KOT:', error);
-      alert('Failed to create KOT');
+      toast.error('Failed to create KOT. Please try again.', {
+        icon: <AlertCircle className="text-red-500" size={20} />,
+        style: {
+          borderRadius: '10px',
+          background: '#fff',
+          color: '#333',
+          border: '1px solid #fee2e2',
+        },
+      });
     }
   };
 
@@ -132,26 +173,66 @@ const KOTInterface = ({
           kot._id === kotId ? { ...kot, status: newStatus } : kot
         )
       );
+      toast.success(`KOT status updated to ${newStatus}!`, {
+        icon: <Check className="text-green-500" size={20} />,
+        style: {
+          borderRadius: '10px',
+          background: '#fff',
+          color: '#333',
+          border: '1px solid #d1fae5',
+        },
+      });
     } catch (error) {
       console.error('Error updating KOT status:', error);
-      alert('Failed to update KOT status');
+      toast.error('Failed to update KOT status.', {
+        icon: <AlertCircle className="text-red-500" size={20} />,
+        style: {
+          borderRadius: '10px',
+          background: '#fff',
+          color: '#333',
+          border: '1px solid #fee2e2',
+        },
+      });
     }
   };
 
   const handleDeleteKOT = async (kotId) => {
-    if (!window.confirm('Are you sure you want to delete this KOT?')) return;
-
-    try {
+    const deleteKOT = async () => {
       await axiosInstance.delete(`/kot/${kotId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
       });
       setRunningKOTs(prev => prev.filter(kot => kot._id !== kotId));
       setSelectedKOT(null);
-      alert('KOT deleted successfully!');
-    } catch (error) {
-      console.error('Error deleting KOT:', error);
-      alert('Failed to delete KOT');
-    }
+    };
+
+    toast.promise(
+      deleteKOT(),
+      {
+        loading: 'Deleting KOT...',
+        success: 'KOT deleted successfully!',
+        error: 'Failed to delete KOT.',
+      },
+      {
+        style: {
+          borderRadius: '10px',
+          background: '#fff',
+          color: '#333',
+          border: '1px solid #e5e7eb',
+        },
+        success: {
+          icon: <Check className="text-green-500" size={20} />,
+          style: {
+            border: '1px solid #d1fae5',
+          },
+        },
+        error: {
+          icon: <AlertCircle className="text-red-500" size={20} />,
+          style: {
+            border: '1px solid #fee2e2',
+          },
+        },
+      }
+    );
   };
 
   const filteredProducts = (selectedCategory === 'all'
@@ -169,6 +250,9 @@ const KOTInterface = ({
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Toaster for Toast Notifications */}
+      <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 p-4 shadow-sm">
         <div className="flex justify-between items-center">
