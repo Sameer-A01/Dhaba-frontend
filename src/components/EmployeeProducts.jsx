@@ -297,7 +297,7 @@ const POSPage = () => {
     printWindow.document.close();
   };
   // Handle bill printing
- const handlePrintBill = () => {
+const handlePrintBill = () => {
   const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
   if (!printWindow) {
     alert("Pop-up blocked! Please allow pop-ups to print invoice.");
@@ -316,7 +316,7 @@ const POSPage = () => {
       <style>
         @page { 
           size: 80mm auto; 
-          margin: 3mm 2mm; 
+          margin: 1mm; 
         }
         
         @media print {
@@ -329,56 +329,56 @@ const POSPage = () => {
         body { 
           font-family: 'Arial', 'Helvetica', sans-serif; 
           margin: 0; 
-          padding: 3mm; 
+          padding: 1mm; 
           color: #000; 
-          font-size: 14px; 
-          line-height: 1.4; 
-          width: 74mm; 
+          font-size: 12px; 
+          line-height: 1.2; 
+          width: 78mm; 
           background: white; 
           box-sizing: border-box;
         }
         
         .invoice-container { 
-          max-width: 74mm; 
+          max-width: 78mm; 
           margin: 0 auto; 
         }
         
         .company-header { 
           text-align: center; 
-          margin-bottom: 8mm; 
-          border-bottom: 2px double #333; 
-          padding-bottom: 4mm; 
+          margin-bottom: 3mm; 
+          border-bottom: 1px solid #333; 
+          padding-bottom: 2mm; 
         }
         
         .company-header h1 { 
-          font-size: 20px; 
-          margin: 0 0 3mm 0; 
+          font-size: 16px; 
+          margin: 0 0 1mm 0; 
           font-weight: bold; 
           text-transform: uppercase;
-          letter-spacing: 1px;
+          letter-spacing: 0.5px;
         }
         
         .company-header p { 
-          margin: 1.5mm 0; 
-          font-size: 12px; 
+          margin: 0.5mm 0; 
+          font-size: 10px; 
           font-weight: 500;
         }
         
         .gst-number {
           font-weight: bold;
-          font-size: 11px;
-          margin-top: 2mm;
+          font-size: 9px;
+          margin-top: 1mm;
         }
         
         .invoice-details { 
-          margin-bottom: 6mm; 
+          margin-bottom: 3mm; 
           border-bottom: 1px dashed #333; 
-          padding-bottom: 4mm; 
+          padding-bottom: 2mm; 
         }
         
         .invoice-details p { 
-          margin: 1.5mm 0; 
-          font-size: 12px; 
+          margin: 0.5mm 0; 
+          font-size: 10px; 
           display: flex; 
           justify-content: space-between; 
           font-weight: 500;
@@ -391,41 +391,42 @@ const POSPage = () => {
         .items-header {
           text-align: center;
           font-weight: bold;
-          font-size: 14px;
-          margin: 4mm 0 2mm 0;
-          padding: 2mm 0;
+          font-size: 12px;
+          margin: 2mm 0 1mm 0;
+          padding: 1mm 0;
           border-bottom: 1px solid #333;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.3px;
         }
         
         table { 
           width: 100%; 
           border-collapse: collapse; 
-          font-size: 11px; 
-          margin-bottom: 4mm; 
+          font-size: 9px; 
+          margin-bottom: 2mm; 
         }
         
         th { 
           text-align: left; 
           font-weight: bold; 
-          border-bottom: 2px solid #333; 
-          padding: 2mm 1mm; 
-          font-size: 12px;
+          border-bottom: 1px solid #333; 
+          padding: 1mm 0.5mm; 
+          font-size: 10px;
           text-transform: uppercase;
         }
         
         td { 
-          padding: 1.5mm 1mm; 
+          padding: 0.5mm; 
           border-bottom: 1px dotted #ccc;
-          font-size: 11px;
+          font-size: 9px;
           font-weight: 500;
         }
         
         .item-name {
           font-weight: bold;
-          max-width: 30mm;
+          max-width: 25mm;
           word-wrap: break-word;
+          font-size: 8px;
         }
         
         .qty-col, .price-col, .total-col {
@@ -434,40 +435,40 @@ const POSPage = () => {
         }
         
         .summary-section { 
-          border-top: 2px double #333; 
-          padding-top: 4mm; 
-          margin-top: 4mm; 
+          border-top: 1px solid #333; 
+          padding-top: 2mm; 
+          margin-top: 2mm; 
         }
         
         .summary-row { 
           display: flex; 
           justify-content: space-between; 
-          padding: 1mm 0; 
-          font-size: 12px; 
+          padding: 0.5mm 0; 
+          font-size: 10px; 
           font-weight: 500;
         }
         
         .summary-row.subtotal {
           border-top: 1px dotted #666;
-          padding-top: 2mm;
-          margin-top: 2mm;
+          padding-top: 1mm;
+          margin-top: 1mm;
         }
         
         .summary-row.total { 
           font-weight: bold; 
-          font-size: 16px; 
-          border-top: 2px solid #333; 
-          border-bottom: 2px solid #333;
-          margin-top: 3mm; 
-          padding: 3mm 0; 
+          font-size: 12px; 
+          border-top: 1px solid #333; 
+          border-bottom: 1px solid #333;
+          margin-top: 1mm; 
+          padding: 1.5mm 0; 
           background: #f8f8f8;
         }
         
         .total-items {
           text-align: center;
-          font-size: 12px;
-          margin-top: 3mm;
-          padding: 2mm;
+          font-size: 10px;
+          margin-top: 2mm;
+          padding: 1mm;
           background: #f0f0f0;
           border: 1px solid #ddd;
           font-weight: bold;
@@ -476,31 +477,31 @@ const POSPage = () => {
         .qr-container { 
           display: flex; 
           justify-content: center; 
-          margin: 5mm 0; 
-          min-height: 90px;
-          padding: 3mm;
+          margin: 2mm 0; 
+          min-height: 60px;
+          padding: 1mm;
           border: 1px dashed #666;
         }
         
         .footer { 
           text-align: center; 
-          margin-top: 6mm; 
-          font-size: 12px; 
-          padding-top: 4mm; 
-          border-top: 2px double #333; 
+          margin-top: 2mm; 
+          font-size: 10px; 
+          padding-top: 2mm; 
+          border-top: 1px solid #333; 
           font-weight: bold;
           font-style: italic;
         }
         
         .footer p {
-          margin: 2mm 0;
+          margin: 0.5mm 0;
         }
         
         .thank-you {
-          font-size: 14px;
+          font-size: 11px;
           color: #333;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.3px;
         }
         
         /* Ensure good contrast for printing */
@@ -517,6 +518,18 @@ const POSPage = () => {
           .summary-section {
             page-break-inside: avoid;
           }
+          
+          body {
+            font-size: 11px;
+          }
+          
+          .company-header h1 {
+            font-size: 14px;
+          }
+          
+          .qr-container {
+            min-height: 50px;
+          }
         }
       </style>
       <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -526,8 +539,7 @@ const POSPage = () => {
         <div class="company-header">
           <h1>${companyInfo.name}</h1>
           <p>${companyInfo.address}</p>
-          <p>📞 ${companyInfo.phone}</p>
-          <p>✉️ ${companyInfo.email}</p>
+          <p>📞 ${companyInfo.phone} | ✉️ ${companyInfo.email}</p>
           <p class="gst-number">GST No: 09ABKFR9647R1ZV</p>
         </div>
         
@@ -599,8 +611,7 @@ const POSPage = () => {
         
         <div class="footer">
           <p class="thank-you">Thank You For Your Visit!</p>
-          <p>Please Come Again</p>
-          <p>Have a Great Day! 😊</p>
+          <p>Please Come Again | Have a Great Day! 😊</p>
         </div>
       </div>
       
@@ -610,8 +621,8 @@ const POSPage = () => {
           // Generate QR Code
           new QRCode(document.getElementById("qrcode"), {
             text: "${qrData}",
-            width: 80,
-            height: 80,
+            width: 60,
+            height: 60,
             colorDark: "#000000",
             colorLight: "#ffffff",
             correctLevel: QRCode.CorrectLevel.M
