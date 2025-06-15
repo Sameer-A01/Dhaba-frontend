@@ -299,6 +299,7 @@ const POSPage = () => {
             <p>${companyInfo.address}</p>
             <p>Tel: ${companyInfo.phone}</p>
             <p>Email: ${companyInfo.email}</p>
+            <p>GST No: 09ABKFR9647R1ZV</p>
           </div>
           <div class="invoice-details">
             <p><strong>Invoice:</strong> <span>${invoiceNum}</span></p>
@@ -361,7 +362,7 @@ const POSPage = () => {
           </div>
           <div class="qr-container" id="qrcode"></div>
           <div class="footer">
-            <p>Thank you for your business!</p>
+            <p>Thank you for visiting! Please visit again.</p>
           </div>
         </div>
         <script>
@@ -380,7 +381,6 @@ const POSPage = () => {
     `);
     printWindow.document.close();
   };
-
   // Calculate bill totals
   const calculateDiscount = () => {
     const discountPercent = parseFloat(companyInfo.discount) || 0;
