@@ -172,8 +172,6 @@ const POSPage = () => {
       return;
     }
 
-    const qrData = `KOT:${kot.kotNumber},TABLE:${rooms.find((r) => r._id === kot.roomId)?.tables.find((t) => t._id === kot.tableId)?.tableNumber || "N/A"}`;
-
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -182,41 +180,94 @@ const POSPage = () => {
         <meta charset="UTF-8">
         <style>
           @page { size: 80mm 297mm; margin: 2mm; }
-          body { font-family: 'Courier New', monospace; margin: 0; padding: 5mm; color: #000; font-size: 12px; line-height: 1.3; width: 70mm; background: white; }
-          .kot-container { max-width: 70mm; margin: 0 auto; }
-          .company-header { text-align: center; margin-bottom: 5mm; border-bottom: 1px dashed #333; padding-bottom: 3mm; }
-          .company-header h1 { font-size: 16px; margin: 0 0 2mm 0; font-weight: bold; }
-          .company-header p { margin: 1mm 0; font-size: 10px; }
-          .kot-details { margin-bottom: 5mm; border-bottom: 1px dashed #333; padding-bottom: 3mm; }
-          .kot-details p { margin: 1mm 0; font-size: 10px; display: flex; justify-content: space-between; }
-          table { width: 100%; border-collapse: collapse; font-size: 9px; margin-bottom: 3mm; }
-          th { text-align: left; font-weight: bold; border-bottom: 1px solid #333; padding: 1mm 0; }
-          td { padding: 0.5mm 0; }
-          .footer { text-align: center; margin-top: 5mm; font-size: 9px; padding-top: 3mm; border-top: 1px dashed #333; }
-          .qr-container { display: flex; justify-content: center; margin: 3mm 0; min-height: 80px; }
+          body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 5mm; 
+            color: #000; 
+            font-size: 14px; 
+            line-height: 1.4; 
+            width: 70mm; 
+            background: white; 
+          }
+          .kot-container { 
+            max-width: 70mm; 
+            margin: 0 auto; 
+          }
+          .header { 
+            text-align: center; 
+            margin-bottom: 5mm; 
+            border-bottom: 2px solid #333; 
+            padding-bottom: 3mm; 
+          }
+          .header h1 { 
+            font-size: 20px; 
+            margin: 0 0 2mm 0; 
+            font-weight: bold; 
+            text-transform: uppercase;
+          }
+          .kot-details { 
+            margin-bottom: 5mm; 
+            border-bottom: 1px solid #333; 
+            padding-bottom: 3mm; 
+          }
+          .kot-details p { 
+            margin: 2mm 0; 
+            font-size: 14px; 
+            display: flex; 
+            justify-content: space-between; 
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            font-size: 13px; 
+            margin-bottom: 5mm; 
+          }
+          th { 
+            text-align: left; 
+            font-weight: bold; 
+            border-bottom: 2px solid #333; 
+            padding: 2mm 0;
+          }
+          td { 
+            padding: 1.5mm 0; 
+            vertical-align: top;
+          }
+          .footer { 
+            text-align: center; 
+            margin-top: 5mm; 
+            font-size: 12px; 
+            padding-top: 3mm; 
+            border-top: 1px solid #333; 
+            font-weight: bold;
+          }
+          .item-name {
+            font-weight: bold;
+          }
+          .instructions {
+            color: #555;
+            font-style: italic;
+          }
         </style>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
       </head>
       <body>
         <div class="kot-container">
-          <div class="company-header">
-            <h1>${companyInfo.name}</h1>
-            <p>${companyInfo.address}</p>
-            <p>Tel: ${companyInfo.phone}</p>
+          <div class="header">
+            <h1>Kitchen Order Ticket</h1>
           </div>
           <div class="kot-details">
-            <p><strong>KOT:</strong> <span>${kot.kotNumber}</span></p>
+            <p><strong>KOT No:</strong> <span>${kot.kotNumber}</span></p>
             <p><strong>Room:</strong> <span>${rooms.find((r) => r._id === kot.roomId)?.roomName || "N/A"}</span></p>
             <p><strong>Table:</strong> <span>${rooms.find((r) => r._id === kot.roomId)?.tables.find((t) => t._id === kot.tableId)?.tableNumber || "N/A"}</span></p>
             <p><strong>Time:</strong> <span>${new Date(kot.createdAt).toLocaleTimeString()}</span></p>
-            <p><strong>Cashier:</strong> <span>${userName || "N/A"}</span></p>
+            <p><strong>Staff:</strong> <span>${userName || "N/A"}</span></p>
           </div>
           <table>
             <thead>
               <tr>
                 <th>Item</th>
-                <th>Qty</th>
-                <th>Instructions</th>
+                <th style="width: 15%;">Qty</th>
+                <th style="width: 35%;">Notes</th>
               </tr>
             </thead>
             <tbody>
@@ -224,37 +275,27 @@ const POSPage = () => {
                 .map(
                   (item) => `
                 <tr>
-                  <td>${item.product.name}</td>
+                  <td class="item-name">${item.product.name}</td>
                   <td>${item.quantity}</td>
-                  <td>${item.specialInstructions || "-"}</td>
+                  <td class="instructions">${item.specialInstructions || "-"}</td>
                 </tr>
               `
                 )
                 .join("")}
             </tbody>
           </table>
-          <div class="qr-container" id="qrcode"></div>
           <div class="footer">
-            <p>Kitchen Order Ticket</p>
+            <p>Thank you!</p>
           </div>
         </div>
         <script>
-          new QRCode(document.getElementById("qrcode"), {
-            text: "${qrData}",
-            width: 80,
-            height: 80,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: QRCode.CorrectLevel.M
-          });
-          setTimeout(() => window.print(), 1000);
+          setTimeout(() => window.print(), 100);
         </script>
       </body>
       </html>
     `);
     printWindow.document.close();
   };
-
   // Handle bill printing
  const handlePrintBill = () => {
   const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
