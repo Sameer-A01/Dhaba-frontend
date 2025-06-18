@@ -1,16 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axiosInstance from '../utils/api';
 import { useAuth } from '../context/AuthContext';
+import EditOrderModal from '../components/EditModel';
 import { 
   FiPackage, FiUser, FiMapPin, FiCalendar, FiDollarSign, 
   FiFilter, FiSearch, FiChevronDown, FiChevronUp, 
   FiPrinter, FiTrendingUp, FiList, FiClock, 
-  FiCheckCircle, FiXCircle, FiRefreshCw 
+  FiCheckCircle, FiXCircle, FiRefreshCw, FiEdit
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
-import { toast } from 'react-toastify'; // Assuming you have react-toastify for notifications
+import { toast } from 'react-toastify';
 
-// Helper functions (unchanged from original)
+// Helper functions
 const calculateTodaySales = (orders) => {
   const today = new Date().toISOString().split('T')[0];
   return orders.reduce((total, order) => {
@@ -52,8 +53,8 @@ const formatRupee = (amount) => {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   }).format(amount).replace('₹', '₹ ');
 };
 
@@ -70,6 +71,16 @@ const getKOTStatusBadge = (status) => {
   }
 };
 
+// Company info from localStorage (matching POSPage.jsx)
+const companyInfo = {
+  name: localStorage.getItem("company_name") || "ROYAL KING DHABA",
+  address: localStorage.getItem("company_address") || "Purvanchal Highway Road, UP, Azamgarh 276001",
+  phone: localStorage.getItem("company_phone") || "+91-7398549531",
+  email: localStorage.getItem("company_email") || "royalkingdhaba9531@gmail.com",
+  taxRate: parseFloat(localStorage.getItem("company_taxRate")) || 5,
+  discount: parseFloat(localStorage.getItem("company_discount")) || 0,
+};
+
 const Orders = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -78,8 +89,17 @@ const Orders = () => {
   const [sortConfig, setSortConfig] = useState({ key: 'orderDate', direction: 'desc' });
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [products, setProducts] = useState([]);
+  const [editForm, setEditForm] = useState({ products: [], discount: null, notes: '' });
+  const [productSearch, setProductSearch] = useState('');
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const { user } = useAuth();
   const [error, setError] = useState(null);
+  const searchInputRef = useRef(null);
+  const modalRef = useRef(null);
+  const invoiceNum = `INV-${Date.now().toString().substr(-6)}`;
 
   const fetchOrders = async (retryCount = 0) => {
     try {
@@ -96,7 +116,7 @@ const Orders = () => {
     } catch (err) {
       console.error("Error fetching orders:", err);
       if (retryCount < 3) {
-        setTimeout(() => fetchOrders(retryCount + 1), 2000); // Retry after 2 seconds
+        setTimeout(() => fetchOrders(retryCount + 1), 2000);
       } else {
         setError('Failed to fetch orders after multiple attempts. Please try again later.');
         toast.error('Failed to fetch orders. Please check your connection.');
@@ -107,14 +127,44 @@ const Orders = () => {
     }
   };
 
+  const fetchProducts = async () => {
+    try {
+      const response = await axiosInstance.get('/products', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('ims_token')}` },
+      });
+      if (response.data.success) {
+        setProducts(response.data.products || []);
+      } else {
+        throw new Error(response.data.error || 'Failed to fetch products');
+      }
+    } catch (err) {
+      console.error("Error fetching products:", err);
+      toast.error('Failed to fetch products. Please try again.');
+    }
+  };
+
   useEffect(() => {
     fetchOrders();
-    // Set up polling for real-time updates
+    fetchProducts();
     const interval = setInterval(() => {
       fetchOrders();
-    }, 30000); // Poll every 30 seconds
-    return () => clearInterval(interval); // Cleanup on unmount
+    }, 30000);
+    return () => clearInterval(interval);
   }, [user.userId]);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (isEditModalOpen) {
+        if (e.key === 'Escape') {
+          setIsEditModalOpen(false);
+        } else if (e.key === 'Enter' && document.activeElement !== searchInputRef.current) {
+          addProductToEditForm();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isEditModalOpen]);
 
   const refreshOrders = () => {
     setRefreshing(true);
@@ -176,103 +226,481 @@ const Orders = () => {
     setExpandedOrder(expandedOrder === orderId ? null : orderId);
   };
 
+  // Calculate bill totals (matching POSPage.jsx and respecting order-specific discount)
+  const calculateDiscount = (subtotal, order) => {
+    let discountAmount = 0;
+    if (order.discount?.type && order.discount?.value) {
+      if (order.discount.type === 'percentage') {
+        discountAmount = (subtotal * order.discount.value) / 100;
+      } else if (order.discount.type === 'fixed') {
+        discountAmount = order.discount.value;
+      }
+    } else {
+      // Fallback to companyInfo.discount only if no order-specific discount
+      const discountPercent = companyInfo.discount || 0;
+      discountAmount = (subtotal * (discountPercent / 100));
+    }
+    return discountAmount.toFixed(2);
+  };
+
+  const calculateSubtotalAfterDiscount = (subtotal, order) => {
+    return (subtotal - parseFloat(calculateDiscount(subtotal, order))).toFixed(2);
+  };
+
+  const calculateTax = (subtotalAfterDiscount) => {
+    const taxRatePercent = companyInfo.taxRate || 0;
+    return (subtotalAfterDiscount * (taxRatePercent / 100)).toFixed(2);
+  };
+
+  const calculateGrandTotal = (subtotal, order) => {
+    const subtotalAfterDiscount = parseFloat(calculateSubtotalAfterDiscount(subtotal, order));
+    const tax = parseFloat(calculateTax(subtotalAfterDiscount));
+    return (subtotalAfterDiscount + tax).toFixed(2);
+  };
+
   const printOrder = (order) => {
     const printWindow = window.open('', '_blank');
+    const discountValue = order.discount?.value || companyInfo.discount || 0;
+    const discountType = order.discount?.type || 'percentage';
+    const discountDisplay = discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`;
+
     printWindow.document.write(`
+      <!DOCTYPE html>
       <html>
-        <head>
-          <title>Order #${order._id}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            h1 { color: #333; }
-            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            .total { font-weight: bold; margin-top: 20px; }
-            .kot-section { margin-top: 30px; border-top: 1px dashed #333; padding-top: 15px; }
-            .kot-header { font-weight: bold; margin-bottom: 5px; }
-            .status-badge { display: inline-block; padding: 2px 6px; border-radius: 12px; font-size: 12px; }
-          </style>
-        </head>
-        <body>
-          <h1>Order Receipt</h1>
-          <p><strong>Order ID:</strong> ${order._id}</p>
-          <p><strong>Date:</strong> ${new Date(order.orderDate).toLocaleString()}</p>
-          ${user.role === 'admin' ? `<p><strong>Customer:</strong> ${order.user?.name || 'N/A'}</p>` : ''}
+      <head>
+        <title>Invoice - ${companyInfo.name}</title>
+        <meta charset="UTF-8">
+        <style>
+          @page { 
+            size: 80mm auto; 
+            margin: 2mm; 
+          }
           
-          <table>
+          @media print {
+            body { 
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+          }
+          
+          body { 
+            font-family: 'Arial', sans-serif; 
+            margin: 0 auto; 
+            padding: 2mm; 
+            color: #333; 
+            font-size: 11px; 
+            line-height: 1.4; 
+            width: 76mm; 
+            background: white; 
+          }
+          
+          .invoice-container { 
+            width: 100%; 
+            max-width: 76mm; 
+            margin: 0 auto; 
+            border: 1px solid #e0e0e0;
+            padding: 3mm;
+            box-sizing: border-box;
+          }
+          
+          .company-header { 
+            text-align: center; 
+            margin-bottom: 4mm; 
+            padding-bottom: 3mm; 
+            border-bottom: 1px solid #e0e0e0;
+          }
+          
+          .company-name { 
+            font-size: 16px; 
+            margin: 0 0 2mm 0; 
+            font-weight: bold; 
+            color: #222;
+            letter-spacing: 0.5px;
+          }
+          
+          .company-details { 
+            margin: 1.5mm 0; 
+            font-size: 10px; 
+            color: #555;
+            line-height: 1.4;
+          }
+          
+          .gst-number {
+            font-weight: bold;
+            font-size: 10px;
+            margin-top: 2mm;
+            color: #555;
+          }
+          
+          .invoice-details { 
+            margin-bottom: 4mm; 
+            padding-bottom: 3mm; 
+            border-bottom: 1px dashed #e0e0e0;
+            font-size: 10px;
+          }
+          
+          .detail-row { 
+            display: flex; 
+            justify-content: space-between;
+            margin: 1.5mm 0;
+          }
+          
+          .detail-label {
+            font-weight: bold;
+            color: #555;
+          }
+          
+          .items-header {
+            font-weight: bold;
+            font-size: 12px;
+            text-align: center;
+            margin: 3mm 0;
+            padding: 2mm 0;
+            border-top: 1px solid #e0e0e0;
+            border-bottom: 1px solid #e0e0e0;
+            background-color: #f8f8f8;
+          }
+          
+          .items-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 4mm; 
+            font-size: 10px;
+          }
+          
+          .items-table th { 
+            text-align: left; 
+            font-weight: bold; 
+            padding: 2mm 0;
+            border-bottom: 2px solid #e0e0e0;
+          }
+          
+          .items-table td { 
+            padding: 1.5mm 0; 
+            border-bottom: 1px dotted #e0e0e0;
+            vertical-align: top;
+          }
+          
+          .item-name {
+            max-width: 35mm;
+            word-break: break-word;
+            font-weight: 500;
+          }
+          
+          .align-right {
+            text-align: right;
+          }
+          
+          .summary-section { 
+            margin-top: 3mm;
+            font-size: 11px;
+          }
+          
+          .summary-row { 
+            display: flex; 
+            justify-content: space-between;
+            margin: 2mm 0;
+            padding: 1mm 0;
+          }
+          
+          .summary-label {
+            color: #555;
+          }
+          
+          .summary-value {
+            font-weight: bold;
+          }
+          
+          .subtotal-row {
+            border-top: 1px dashed #e0e0e0;
+            padding-top: 2mm;
+          }
+          
+          .total-row {
+            border-top: 2px solid #e0e0e0;
+            border-bottom: 2px solid #e0e0e0;
+            margin: 3mm 0;
+            padding: 2.5mm 0;
+            font-size: 12px;
+            font-weight: bold;
+            background-color: #f8f8f8;
+          }
+          
+          .footer { 
+            text-align: center; 
+            margin-top: 4mm; 
+            font-size: 10px; 
+            padding-top: 3mm; 
+            border-top: 1px solid #e0e0e0;
+            color: #555;
+          }
+          
+          .thank-you {
+            font-weight: bold;
+            font-size: 12px;
+            color: #333;
+            margin-bottom: 2mm;
+            letter-spacing: 0.5px;
+          }
+          
+          .return-policy {
+            font-size: 9px;
+            margin-top: 2mm;
+            font-style: italic;
+          }
+          
+          /* Print-specific adjustments */
+          @media print {
+            .invoice-container {
+              border: none;
+              padding: 2mm;
+            }
+            
+            body {
+              padding: 0;
+              font-size: 10px;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-container">
+          <div class="company-header">
+            <div class="company-name">${companyInfo.name.toUpperCase()}</div>
+            <div class="company-details">
+              ${companyInfo.address}<br>
+              📞 ${companyInfo.phone} | ✉️ ${companyInfo.email}
+            </div>
+            <div class="gst-number">GSTIN: 09ABKFR9647R1ZV</div>
+          </div>
+          
+          <div class="invoice-details">
+            <div class="detail-row">
+              <span class="detail-label">Invoice #:</span>
+              <span>${invoiceNum}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Date:</span>
+              <span>${new Date(order.orderDate).toLocaleDateString('en-IN')}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Time:</span>
+              <span>${new Date(order.orderDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Cashier:</span>
+              <span>${order.user?.name || "Admin"}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Room:</span>
+              <span>${order.room?.roomName || "N/A"}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Table:</span>
+              <span>${order.table?.tableNumber || "N/A"}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Payment Method:</span>
+              <span>${order.paymentMethod ? order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1) : "Cash"}</span>
+            </div>
+          </div>
+          
+          <div class="items-header">ORDER DETAILS</div>
+          
+          <table class="items-table">
             <thead>
               <tr>
-                <th>Product</th>
-                <th>Category</th>
-                <th>Quantity</th>
-                <th>Price</th>
-                <th>Total</th>
+                <th>ITEM</th>
+                <th class="align-right">QTY</th>
+                <th class="align-right">PRICE</th>
+                <th class="align-right">TOTAL</th>
               </tr>
             </thead>
             <tbody>
-              ${order.products?.map(item => `
+              ${order.products
+                .map(
+                  (item) => `
                 <tr>
-                  <td>${item.product?.name || 'N/A'}</td>
-                  <td>${item.product?.category?.name || 'N/A'}</td>
-                  <td>${item.quantity || 0}</td>
-                  <td>${formatRupee(item.price || 0)}</td>
-                  <td>${formatRupee((item.price || 0) * (item.quantity || 0))}</td>
+                  <td class="item-name">${item.product?.name || "N/A"}</td>
+                  <td class="align-right">${item.quantity || 0}</td>
+                  <td class="align-right">₹${(item.price || 0).toFixed(2)}</td>
+                  <td class="align-right">₹${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</td>
                 </tr>
-              `).join('') || '<tr><td colspan="5">No products</td></tr>'}
+              `
+                )
+                .join("")}
             </tbody>
           </table>
           
-          <div class="total">
-            <p>Order Total: ${formatRupee(order.products?.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0) || 0)}</p>
-          </div>
-
-          ${order.kots && order.kots.length > 0 ? `
-            <div class="kot-section">
-              <h2>KOT Details</h2>
-              ${order.kots.map(kot => {
-                const statusBadge = getKOTStatusBadge(kot.status);
-                return `
-                  <div class="kot-details" style="margin-bottom: 15px;">
-                    <div class="kot-header">
-                      <span style="font-weight: bold;">${kot.kotNumber || 'N/A'}</span>
-                      <span class="status-badge ${statusBadge.color}">
-                        ${statusBadge.icon}
-                        ${kot.status || 'Unknown'}
-                      </span>
-                    </div>
-                    <p><strong>Created:</strong> ${new Date(kot.createdAt).toLocaleString()}</p>
-                    <table style="margin-top: 5px;">
-                      <thead>
-                        <tr>
-                          <th>Item</th>
-                          <th>Qty</th>
-                          <th>Price</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        ${kot.orderItems?.map(item => `
-                          <tr>
-                            <td>${item.product?.name || 'N/A'}</td>
-                            <td>${item.quantity || 0}</td>
-                            <td>${formatRupee(item.product?.price || 0)}</td>
-                          </tr>
-                        `).join('') || '<tr><td colspan="3">No items</td></tr>'}
-                      </tbody>
-                    </table>
-                  </div>
-                `;
-              }).join('')}
+          <div class="summary-section">
+            <div class="summary-row">
+              <span class="summary-label">Subtotal:</span>
+              <span class="summary-value">₹${(order.subTotal || 0).toFixed(2)}</span>
             </div>
-          ` : '<p>No KOTs associated</p>'}
-        </body>
+            <div class="summary-row">
+              <span class="summary-label">Discount (${discountDisplay}):</span>
+              <span class="summary-value">- ₹${calculateDiscount(order.subTotal || 0, order)}</span>
+            </div>
+            <div class="summary-row subtotal-row">
+              <span class="summary-label">After Discount:</span>
+              <span class="summary-value">₹${calculateSubtotalAfterDiscount(order.subTotal || 0, order)}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">GST (${companyInfo.taxRate}%):</span>
+              <span class="summary-value">₹${calculateTax(calculateSubtotalAfterDiscount(order.subTotal || 0, order))}</span>
+            </div>
+            <div class="summary-row total-row">
+              <span>GRAND TOTAL:</span>
+              <span>₹${calculateGrandTotal(order.subTotal || 0, order)}</span>
+            </div>
+          </div>
+          
+          <div class="footer">
+            <div class="thank-you">THANK YOU FOR YOUR VISIT</div>
+            <div>We appreciate your business!</div>
+          </div>
+        </div>
+        
+        <script>
+          window.onload = function() {
+            setTimeout(() => {
+              window.print();
+              setTimeout(() => window.close(), 1000);
+            }, 500);
+          };
+        </script>
+      </body>
       </html>
     `);
     printWindow.document.close();
-    printWindow.print();
   };
 
-  // Mobile Card View for Orders
+  const openEditModal = async (order) => {
+    try {
+      const response = await axiosInstance.get(`/order/single/${order._id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('ims_token')}` },
+      });
+      if (response.data.success) {
+        setEditingOrder(response.data.order);
+        setEditForm({
+          products: response.data.order.products.map(item => ({
+            productId: item.product._id,
+            quantity: item.quantity,
+            price: item.price
+          })),
+          discount: response.data.order.discount || null,
+          notes: response.data.order.notes || ''
+        });
+        setIsEditModalOpen(true);
+        setProductSearch('');
+        setIsPreviewOpen(false);
+      } else {
+        throw new Error(response.data.error || 'Failed to fetch order details');
+      }
+    } catch (err) {
+      console.error("Error fetching order details:", err);
+      toast.error('Failed to load order details. Please try again.');
+    }
+  };
+
+  const handleEditFormChange = (index, field, value) => {
+    const updatedProducts = [...editForm.products];
+    updatedProducts[index] = { ...updatedProducts[index], [field]: value };
+    setEditForm({ ...editForm, products: updatedProducts });
+  };
+
+  const addProductToEditForm = () => {
+    if (productSearch) {
+      const product = products.find(p => p.name.toLowerCase() === productSearch.toLowerCase());
+      if (product && product.stock > 0) {
+        setEditForm({
+          ...editForm,
+          products: [...editForm.products, { productId: product._id, quantity: 1, price: product.price }]
+        });
+        setProductSearch('');
+      } else {
+        toast.error(product ? 'Product out of stock' : 'Product not found');
+      }
+    } else {
+      setEditForm({
+        ...editForm,
+        products: [...editForm.products, { productId: '', quantity: 1, price: 0 }]
+      });
+    }
+  };
+
+  const removeProductFromEditForm = (index) => {
+    setEditForm({
+      ...editForm,
+      products: editForm.products.filter((_, i) => i !== index)
+    });
+  };
+
+  const handleDiscountChange = (field, value) => {
+    setEditForm({
+      ...editForm,
+      discount: { ...editForm.discount, [field]: value }
+    });
+  };
+
+  const handleNotesChange = (value) => {
+    setEditForm({ ...editForm, notes: value });
+  };
+
+  const calculateOrderTotals = () => {
+    const subtotal = editForm.products.reduce((total, item) => {
+      const product = products.find(p => p._id === item.productId);
+      return total + (product ? product.price * item.quantity : 0);
+    }, 0);
+
+    let discountAmount = 0;
+    if (editForm.discount?.type && editForm.discount?.value) {
+      if (editForm.discount.type === 'percentage') {
+        discountAmount = (subtotal * editForm.discount.value) / 100;
+      } else if (editForm.discount.type === 'fixed') {
+        discountAmount = editForm.discount.value;
+      }
+    }
+
+    const total = subtotal - discountAmount;
+    return { subtotal, discountAmount, total };
+  };
+
+  const saveOrderChanges = async () => {
+    try {
+      const payload = {
+        products: editForm.products.filter(p => p.productId && p.quantity > 0).map(p => ({
+          productId: p.productId,
+          quantity: p.quantity
+        })),
+        discount: editForm.discount,
+        notes: editForm.notes
+      };
+
+      const response = await axiosInstance.put(`/order/update/${editingOrder._id}`, payload, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('ims_token')}` },
+      });
+
+      if (response.data.success) {
+        setOrders(orders.map(o => o._id === editingOrder._id ? response.data.order : o));
+        setIsEditModalOpen(false);
+        toast.success('Order updated successfully');
+        printOrder(response.data.order);
+      } else {
+        throw new Error(response.data.error || 'Failed to update order');
+      }
+    } catch (err) {
+      console.error("Error updating order:", err);
+      toast.error('Failed to update order. Please try again.');
+    }
+  };
+
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(productSearch.toLowerCase()) && product.stock > 0
+  );
+
+  const { subtotal, discountAmount, total } = calculateOrderTotals();
+
   const OrderCard = ({ order }) => {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 mb-3">
@@ -282,9 +710,21 @@ const Orders = () => {
             <button 
               onClick={(e) => {
                 e.stopPropagation();
+                openEditModal(order);
+              }}
+              className="text-yellow-600 hover:text-yellow-800 p-1"
+              disabled={order.status === 'completed' || order.status === 'cancelled'}
+              aria-label="Edit order"
+            >
+              <FiEdit size={16} />
+            </button>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
                 printOrder(order);
               }}
               className="text-blue-600 hover:text-blue-800 p-1"
+              aria-label="Print order"
             >
               <FiPrinter size={16} />
             </button>
@@ -294,6 +734,7 @@ const Orders = () => {
                 toggleOrderExpansion(order._id);
               }}
               className="text-gray-600 hover:text-gray-800 p-1"
+              aria-label="Toggle order details"
             >
               {expandedOrder === order._id ? <FiChevronUp size={16} /> : <FiChevronDown size={16} />}
             </button>
@@ -309,7 +750,7 @@ const Orders = () => {
           <div>
             <p className="text-gray-500">Total</p>
             <p className="font-medium text-green-600">
-              {formatRupee(order.products?.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0) || 0)}
+              {formatRupee(order.totalAmount || 0)}
             </p>
           </div>
           
@@ -362,10 +803,22 @@ const Orders = () => {
                   </div>
                 )) || <p>No products</p>}
                 <div className="flex justify-between items-center pt-2">
-                  <p className="font-medium text-gray-800">Order Total</p>
-                  <p className="font-bold text-lg text-green-600">
-                    {formatRupee(order.products?.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0) || 0)}
-                  </p>
+                  <p className="font-medium text-gray-800">Subtotal</p>
+                  <p className="font-medium text-gray-800">{formatRupee(order.subTotal || 0)}</p>
+                </div>
+                {order.discount && (
+                  <div className="flex justify-between items-center">
+                    <p className="font-medium text-gray-800">
+                      Discount {order.discount.reason ? `(${order.discount.reason})` : ''}
+                    </p>
+                    <p className="font-medium text-red-600">
+                      -{formatRupee(calculateDiscount(order.subTotal || 0, order))}
+                    </p>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                  <p className="font-medium text-gray-800">Total</p>
+                  <p className="font-bold text-lg text-green-600">{formatRupee(order.totalAmount || 0)}</p>
                 </div>
               </div>
 
@@ -444,6 +897,7 @@ const Orders = () => {
             disabled={refreshing}
             className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
             title="Refresh orders"
+            aria-label="Refresh orders"
           >
             <FiRefreshCw className={refreshing ? "animate-spin" : ""} size={18} />
           </button>
@@ -460,6 +914,7 @@ const Orders = () => {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
+              aria-label="Search orders"
             />
           </div>
           
@@ -467,6 +922,7 @@ const Orders = () => {
             <button 
               className="bg-white border border-gray-300 rounded-lg px-4 py-2 flex items-center justify-center w-full"
               onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
+              aria-label="Open sort menu"
             >
               <FiFilter className="mr-2" />
               <span>Sort</span>
@@ -519,7 +975,7 @@ const Orders = () => {
         </div>
       </div>
 
-      {/* Stats Cards - Responsive Grid */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 mb-6">
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
           <div className="flex items-center justify-between">
@@ -565,7 +1021,27 @@ const Orders = () => {
         </div>
       </div>
 
-      {/* Mobile Order Cards (Shown on small screens) */}
+      {/* Enhanced Edit Order Modal */}
+      <EditOrderModal
+        isEditModalOpen={isEditModalOpen}
+        setIsEditModalOpen={setIsEditModalOpen}
+        editingOrder={editingOrder}
+        editForm={editForm}
+        setEditForm={setEditForm}
+        products={products}
+        productSearch={productSearch}
+        setProductSearch={setProductSearch}
+        filteredProducts={filteredProducts}
+        handleEditFormChange={handleEditFormChange}
+        handleDiscountChange={handleDiscountChange}
+        handleNotesChange={handleNotesChange}
+        addProductToEditForm={addProductToEditForm}
+        removeProductFromEditForm={removeProductFromEditForm}
+        saveOrderChanges={saveOrderChanges}
+        formatRupee={formatRupee}
+      />
+
+      {/* Mobile Order Cards */}
       <div className="md:hidden">
         {loading ? (
           <div className="flex justify-center py-10">
@@ -590,7 +1066,7 @@ const Orders = () => {
         )}
       </div>
 
-      {/* Desktop Orders Table (Hidden on small screens) */}
+      {/* Desktop Orders Table */}
       <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -627,7 +1103,10 @@ const Orders = () => {
                         )}
                       </div>
                     </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th 
+                      scope="col" 
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                    >
                       <div className="flex items-center">
                         <FiMapPin className="mr-1" size={14} />
                         Address
@@ -650,16 +1129,28 @@ const Orders = () => {
                     )}
                   </div>
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th 
+                  scope="col" 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Items
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th 
+                  scope="col" 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   KOTs
                 </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th 
+                  scope="col" 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Total
                 </th>
-                <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th 
+                  scope="col" 
+                  className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
                   Actions
                 </th>
               </tr>
@@ -667,7 +1158,7 @@ const Orders = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={user.role === 'admin' ? 8 : 6} className="px-6 py-4 text-center">
+                  <td colSpan={user.role === 'admin' ? 8 : 5} className="px-6 py-4 text-center">
                     <div className="flex justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
                     </div>
@@ -703,15 +1194,27 @@ const Orders = () => {
                         {order.kots?.length || 0} KOT{(order.kots?.length || 0) !== 1 ? 's' : ''}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
-                        {formatRupee(order.products?.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0) || 0)}
+                        {formatRupee(order.totalAmount || 0)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditModal(order);
+                          }}
+                          className="text-yellow-600 hover:text-yellow-800 mr-3"
+                          disabled={order.status === 'completed' || order.status === 'cancelled'}
+                          aria-label="Edit order"
+                        >
+                          <FiEdit size={16} />
+                        </button>
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
                             printOrder(order);
                           }}
                           className="text-blue-600 hover:text-blue-800 mr-3"
+                          aria-label="Print order"
                         >
                           <FiPrinter size={16} />
                         </button>
@@ -721,6 +1224,7 @@ const Orders = () => {
                             toggleOrderExpansion(order._id);
                           }}
                           className="text-gray-600 hover:text-gray-800"
+                          aria-label="Toggle order details"
                         >
                           {expandedOrder === order._id ? <FiChevronUp size={16} /> : <FiChevronDown size={16} />}
                         </button>
@@ -735,7 +1239,7 @@ const Orders = () => {
                           transition={{ duration: 0.3 }}
                           className="bg-gray-50"
                         >
-                          <td colSpan={user.role === 'admin' ? 8 : 6} className="px-6 py-4">
+                          <td colSpan={user.role === 'admin' ? 8 : 5} className="px-6 py-4">
                             <div className="bg-white rounded-lg shadow-xs p-4">
                               <h4 className="font-medium text-gray-800 mb-3">Order Details</h4>
                               <div className="space-y-3">
@@ -751,12 +1255,31 @@ const Orders = () => {
                                     </div>
                                   </div>
                                 )) || <p>No products</p>}
-                                <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-                                  <p className="font-medium text-gray-800">Order Total</p>
-                                  <p className="font-bold text-lg text-green-600">
-                                    {formatRupee(order.products?.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0) || 0)}
-                                  </p>
+                                <div className="flex justify-between items-center pt-2">
+                                  <p className="font-medium text-gray-800">Subtotal</p>
+                                  <p className="font-medium text-gray-800">{formatRupee(order.subTotal || 0)}</p>
                                 </div>
+                                {order.discount && (
+                                  <div className="flex justify-between items-center">
+                                    <p className="font-medium text-gray-800">
+                                      Discount {order.discount.reason ? `(${order.discount.reason})` : ''}
+                                    </p>
+                                    <p className="font-medium text-red-600">
+                                      -{formatRupee(calculateDiscount(order.subTotal || 0, order))}
+                                    </p>
+                                  </div>
+                                )}
+                                <div className="flex justify-between items-center pt-2 border-t border-gray-200">
+                                  <p className="font-medium text-gray-800">Total</p>
+                                  <p className="font-bold text-lg text-green-600">{formatRupee(order.totalAmount || 0)}</p>
+                                </div>
+                                {order.notes && (
+                                  <div className="mt-4">
+                                    <p className="text-sm text-gray-600">
+                                      <strong>Notes:</strong> {order.notes}
+                                    </p>
+                                  </div>
+                                )}
                               </div>
 
                               {order.kots && order.kots.length > 0 ? (
@@ -780,10 +1303,8 @@ const Orders = () => {
                                           <div className="space-y-2">
                                             {kot.orderItems?.map((item, i) => (
                                               <div key={i} className="flex justify-between items-center text-sm py-1 border-b border-gray-100 last:border-0">
-                                                <span className="font-medium">{item.product?.name || 'N/A'}</span>
-                                                <span className="text-gray-600">
-                                                  {item.quantity || 0} × {formatRupee(item.product?.price || 0)}
-                                                </span>
+                                                <span>{item.product?.name || 'N/A'}</span>
+                                                <span>{item.quantity || 0} × {formatRupee(item.product?.price || 0)}</span>
                                               </div>
                                             )) || <p>No items</p>}
                                           </div>
@@ -804,7 +1325,7 @@ const Orders = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={user.role === 'admin' ? 8 : 6} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={user.role === 'admin' ? 8 : 5} className="px-6 py-4 text-center text-sm text-gray-500">
                     <p>No orders found</p>
                     {searchTerm && (
                       <button 
@@ -822,7 +1343,7 @@ const Orders = () => {
         </div>
       </div>
 
-      {/* Pagination for future use */}
+      {/* Pagination */}
       {filteredOrders.length > 0 && (
         <div className="mt-4 flex justify-center sm:justify-end">
           <nav className="relative z-0 inline-flex shadow-sm -space-x-px" aria-label="Pagination">

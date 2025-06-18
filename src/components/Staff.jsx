@@ -555,30 +555,52 @@ const Staff = () => {
                     }}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  <FormControl
-                    fullWidth
-                    variant="outlined"
-                    sx={{
-                      bgcolor: "white",
-                      borderRadius: 2,
-                      "& .MuiOutlinedInput-root": {
-                        borderRadius: 2,
-                        "& fieldset": { borderColor: "#10b981" },
-                        "&:hover fieldset": { borderColor: "#059669" },
-                      },
-                    }}
-                  >
-                    <InputLabel sx={{ color: "#1f2937" }}>Gender</InputLabel>
-                    <Select name="gender" value={form.gender} onChange={handleChange} label="Gender">
-                      {genders.map((gender) => (
-                        <MenuItem key={gender} value={gender}>
-                          {gender}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
+               <Grid item xs={12} md={6}>
+  <FormControl
+    fullWidth
+    variant="outlined"
+    required
+    sx={{
+      bgcolor: "white",
+      borderRadius: 2,
+      minWidth: 120,
+      "& .MuiOutlinedInput-root": {
+        borderRadius: 2,
+        "& fieldset": { borderColor: "#10b981" },
+        "&:hover fieldset": { borderColor: "#059669" },
+      },
+      "& .MuiInputLabel-root": {
+        transform: "translate(14px, 14px) scale(1)",
+        "&.Mui-focused, &.MuiFormLabel-filled": {
+          transform: "translate(14px, -9px) scale(0.75)",
+        },
+      },
+      "& .MuiInputBase-root": {
+        height: 56,
+      },
+    }}
+  >
+    <InputLabel sx={{ color: "#1f2937" }}>Gender *</InputLabel>
+    <Select 
+      name="gender" 
+      value={form.gender} 
+      onChange={handleChange} 
+      label="Gender *"
+      required
+      sx={{
+        "& .MuiSelect-select": {
+          padding: "16.5px 14px",
+        },
+      }}
+    >
+      {genders.map((gender) => (
+        <MenuItem key={gender} value={gender}>
+          {gender}
+        </MenuItem>
+      ))}
+    </Select>
+  </FormControl>
+</Grid>
                 <Grid item xs={12} md={6}>
                   <TextField
                     fullWidth

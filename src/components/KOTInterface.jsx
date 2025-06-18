@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axiosInstance from '../utils/api';
-import { Printer, Plus, Minus, X, Utensils, Clock, CheckCircle, Trash2, ChevronDown, ChevronUp, User, Search, ArrowLeft, AlertCircle, Check } from 'lucide-react';
+import { Printer, Plus, Minus, X, Utensils, Clock, CheckCircle, Trash2, ChevronDown, ChevronUp, User, Search, ArrowLeft, AlertCircle, Check, Edit2, Percent } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -24,6 +24,11 @@ const KOTInterface = ({
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+  const [updateKotItems, setUpdateKotItems] = useState([]);
+  const [editingKOT, setEditingKOT] = useState(null);
+  const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
+  const [discount, setDiscount] = useState({ type: 'percentage', value: 0 });
 
   // Fetch running KOTs and categories
   useEffect(() => {
@@ -100,6 +105,35 @@ const KOTInterface = ({
           : item
       )
     );
+  };
+
+  const handleUpdateItem = (productId, quantity, specialInstructions) => {
+    if (quantity < 1) {
+      setUpdateKotItems(prev => prev.filter(item => item.product._id !== productId));
+      return;
+    }
+
+    setUpdateKotItems(prev =>
+      prev.map(item =>
+        item.product._id === productId
+          ? { ...item, quantity, specialInstructions }
+          : item
+      )
+    );
+  };
+
+  const handleAddUpdateItem = (product) => {
+    setUpdateKotItems(prev => {
+      const existing = prev.find(item => item.product._id === product._id);
+      if (existing) {
+        return prev.map(item =>
+          item.product._id === product._id
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
+        );
+      }
+      return [...prev, { product, quantity: 1, specialInstructions: '' }];
+    });
   };
 
   const handleSubmitKOT = async () => {
@@ -235,6 +269,113 @@ const KOTInterface = ({
     );
   };
 
+  const handleOpenUpdateModal = (kot) => {
+    setEditingKOT(kot);
+    setUpdateKotItems(kot.orderItems.map(item => ({
+      product: item.product,
+      quantity: item.quantity,
+      specialInstructions: item.specialInstructions || ''
+    })));
+    setIsUpdateModalOpen(true);
+  };
+
+  const handleUpdateKOT = async () => {
+    if (updateKotItems.length === 0) {
+      toast.error('No items in the updated KOT.', {
+        icon: <AlertCircle className="text-red-500" size={20} />,
+        style: {
+          borderRadius: '10px',
+          background: '#fff',
+          color: '#333',
+          border: '1px solid #fee2e2',
+        },
+      });
+      return;
+    }
+
+    try {
+      const user = JSON.parse(localStorage.getItem("ims_user"));
+      const response = await axiosInstance.put(`/kot/${editingKOT._id}`, {
+        orderItems: updateKotItems.map(item => ({
+          product: item.product._id,
+          quantity: item.quantity,
+          specialInstructions: item.specialInstructions
+        })),
+        tableId: editingKOT.tableId,
+        roomId: editingKOT.roomId,
+        user: user?._id
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
+      });
+
+      setRunningKOTs(prev =>
+        prev.map(kot =>
+          kot._id === editingKOT._id ? response.data.kot : kot
+        )
+      );
+      setIsUpdateModalOpen(false);
+      setEditingKOT(null);
+      setUpdateKotItems([]);
+      toast.success('KOT updated successfully!', {
+        icon: <Check className="text-green-500" size={20} />,
+        style: {
+          borderRadius: '10px',
+          background: '#fff',
+          color: '#333',
+          border: '1px solid #d1fae5',
+        },
+      });
+    } catch (error) {
+      console.error('Error updating KOT:', error);
+      toast.error('Failed to update KOT. Please try again.', {
+        icon: <AlertCircle className="text-red-500" size={20} />,
+        style: {
+          borderRadius: '10px',
+          background: '#fff',
+          color: '#333',
+          border: '1px solid #fee2e2',
+        },
+      });
+    }
+  };
+
+  const handleApplyDiscount = () => {
+    if (discount.value < 0 || (discount.type === 'percentage' && discount.value > 100)) {
+      toast.error('Invalid discount value.', {
+        icon: <AlertCircle className="text-red-500" size={20} />,
+        style: {
+          borderRadius: '10px',
+          background: '#fff',
+          color: '#333',
+          border: '1px solid #fee2e2',
+        },
+      });
+      return;
+    }
+    setIsDiscountModalOpen(false);
+    toast.success(`Discount applied: ${discount.value}${discount.type === 'percentage' ? '%' : '₹'}`, {
+      icon: <Check className="text-green-500" size={20} />,
+      style: {
+        borderRadius: '10px',
+        background: '#fff',
+        color: '#333',
+        border: '1px solid #d1fae5',
+      },
+    });
+  };
+
+  const calculateDiscountedTotal = () => {
+    if (discount.value === 0) return totalKOTPrice;
+    if (discount.type === 'percentage') {
+      return totalKOTPrice * (1 - discount.value / 100);
+    }
+    return totalKOTPrice - discount.value;
+  };
+
+  const handleGenerateBill = () => {
+    onAddToBill(null, true, paymentMethod, { ...discount, discountedTotal: calculateDiscountedTotal() });
+  };
+
   const filteredProducts = (selectedCategory === 'all'
     ? products
     : products.filter(product => product.category?._id === selectedCategory)
@@ -243,18 +384,16 @@ const KOTInterface = ({
     (product.category?.name && product.category.name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  // Calculate total price of all KOTs
   const totalKOTPrice = runningKOTs.reduce((sum, kot) =>
     sum + kot.orderItems.reduce((kotSum, item) =>
       kotSum + (item.product.price * item.quantity), 0), 0);
 
   return (
     <div className="flex flex-col h-full bg-gradient-to-br from-gray-50 to-gray-100">
-      {/* Toaster for Toast Notifications */}
       <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
 
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 p-4 shadow-sm">
+      <div className="bg-white/80 backdrop-blur-md border-b border-gray-200 p-1 shadow-sm">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-800">
             {activeTab === 'new-order' ? (
@@ -440,7 +579,7 @@ const KOTInterface = ({
         <div className={`${activeTab === 'running-kots' ? 'flex-1 overflow-auto' : 'hidden'} bg-gradient-to-br from-gray-50 to-gray-100`}>
           <div className="flex h-full">
             {/* Main KOT content */}
-            <div className="flex-1 p-6">
+            <div className="flex-1 p-1">
               <AnimatePresence mode="wait">
                 <motion.div
                   key="running-kots-content"
@@ -450,8 +589,8 @@ const KOTInterface = ({
                   transition={{ duration: 0.3 }}
                   className="h-full"
                 >
-                  <div className="space-y-6 h-full max-w-7xl mx-auto">
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                  <div className="space-y-4 h-full max-w-7xl mx-auto">
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3">
                       <div className="flex justify-between items-center">
                         <div className="flex items-center space-x-4">
                           <motion.button
@@ -509,7 +648,7 @@ const KOTInterface = ({
                         </div>
                       </motion.div>
                     ) : (
-                      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 pb-6">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 pb-4">
                         {runningKOTs.map((kot, index) => (
                           <motion.div
                             key={kot._id}
@@ -553,6 +692,15 @@ const KOTInterface = ({
                                     title="Print KOT"
                                   >
                                     <Printer size={16} />
+                                  </motion.button>
+                                  <motion.button
+                                    onClick={() => handleOpenUpdateModal(kot)}
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    className="p-2 text-gray-400 hover:text-yellow-600 rounded-lg hover:bg-yellow-50 transition-colors"
+                                    title="Update KOT"
+                                  >
+                                    <Edit2 size={16} />
                                   </motion.button>
                                   <motion.button
                                     onClick={() => handleDeleteKOT(kot._id)}
@@ -609,7 +757,7 @@ const KOTInterface = ({
                                   </div>
                                 )}
                               </div>
-                              <div className="flex flex-col space-y-3">
+                              <div className="flex flex-col space-y-2">
                                 <div className="flex space-x-2">
                                   <motion.button
                                     onClick={() => handleKOTStatusChange(kot._id, 'preparing')}
@@ -714,15 +862,25 @@ const KOTInterface = ({
             {/* Running KOTs Sidebar */}
             {activeTab === 'running-kots' && (
               <div className="w-96 border-l border-gray-200 bg-white shadow-inner flex flex-col h-full">
-                <div className="p-4 border-b border-gray-200">
+                <div className="p-2 border-b border-gray-200">
                   <h3 className="text-lg font-semibold text-gray-800">All Running KOTs</h3>
                   <div className="mt-2">
                     <span className="text-sm text-gray-500">
                       {runningKOTs.length} {runningKOTs.length === 1 ? 'KOT' : 'KOTs'}
                     </span>
                     <div className="mt-2 text-lg font-bold text-blue-600">
-                      Total: ₹{totalKOTPrice.toFixed(2)}
+                      Original Total: ₹{totalKOTPrice.toFixed(2)}
                     </div>
+                    {discount.value > 0 && (
+                      <div className="mt-1">
+                        <span className="text-sm text-gray-600">
+                          Discount: {discount.value}{discount.type === 'percentage' ? '%' : '₹'} off
+                        </span>
+                        <div className="text-lg font-bold text-green-600">
+                          Final Total: ₹{calculateDiscountedTotal().toFixed(2)}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex-1 overflow-auto p-4">
@@ -874,6 +1032,223 @@ const KOTInterface = ({
         )}
       </div>
 
+      {/* Update KOT Modal */}
+      <AnimatePresence>
+        {isUpdateModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 w-full max-w-4xl max-h-[80vh] overflow-auto"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-semibold text-gray-800">Update KOT #{editingKOT?.kotNumber}</h3>
+                <button
+                  onClick={() => setIsUpdateModalOpen(false)}
+                  className="p-2 text-gray-500 hover:text-gray-700"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Product Selection */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-4">Add Products</h4>
+                  <div className="relative mb-4">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Search className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Search menu items..."
+                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                      >
+                        <X className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 max-h-96 overflow-y-auto">
+                    {filteredProducts.map(product => (
+                      <motion.div
+                        key={product._id}
+                        onClick={() => handleAddUpdateItem(product)}
+                        className="relative bg-white rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+                        whileHover={{ y: -4 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        <div className="font-medium text-gray-800 truncate">{product.name}</div>
+                        <div className="text-sm text-gray-500 mt-1">{product.category?.name}</div>
+                        <div className="mt-2 text-lg font-bold text-blue-600">₹{product.price}</div>
+                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="bg-blue-600 text-white rounded-full p-1 shadow-md">
+                            <Plus size={16} />
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+                {/* Current Items */}
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 mb-4">Current Items</h4>
+                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                    {updateKotItems.length === 0 ? (
+                      <div className="text-center text-gray-400 py-4">
+                        <p className="text-sm">No items added yet</p>
+                      </div>
+                    ) : (
+                      updateKotItems.map(item => (
+                        <motion.div
+                          key={item.product._id}
+                          className="bg-gray-50 hover:bg-gray-100 rounded-lg p-3 transition-colors"
+                          layout
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="font-medium flex items-center">
+                                <span>{item.product.name}</span>
+                                <span className="ml-2 text-sm text-gray-500">₹{item.product.price}</span>
+                              </div>
+                              <input
+                                type="text"
+                                placeholder="Add special instructions..."
+                                className="mt-1 text-sm w-full px-2 py-1 border-b border-gray-200 focus:border-blue-500 outline-none bg-transparent placeholder-gray-400"
+                                value={item.specialInstructions}
+                                onChange={(e) =>
+                                  handleUpdateItem(item.product._id, item.quantity, e.target.value)
+                                }
+                              />
+                            </div>
+                            <div className="flex items-center ml-4 bg-white rounded-full shadow-inner">
+                              <button
+                                onClick={() => handleUpdateItem(item.product._id, item.quantity - 1, item.specialInstructions)}
+                                className="p-1 text-gray-500 hover:text-red-500 transition-colors"
+                              >
+                                <Minus size={16} />
+                              </button>
+                              <span className="mx-2 w-6 text-center font-medium">{item.quantity}</span>
+                              <button
+                                onClick={() => handleUpdateItem(item.product._id, item.quantity + 1, item.specialInstructions)}
+                                className="p-1 text-gray-500 hover:text-green-500 transition-colors"
+                              >
+                                <Plus size={16} />
+                              </button>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <motion.button
+                  onClick={() => setIsUpdateModalOpen(false)}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  onClick={handleUpdateKOT}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Update KOT
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Discount Modal */}
+      <AnimatePresence>
+        {isDiscountModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl p-6 w-full max-w-md"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-semibold text-gray-800">Apply Discount</h3>
+                <button
+                  onClick={() => setIsDiscountModalOpen(false)}
+                  className="p-2 text-gray-500 hover:text-gray-700"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Discount Type</label>
+                  <select
+                    value={discount.type}
+                    onChange={(e) => setDiscount({ ...discount, type: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed">Fixed Amount (₹)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Discount Value</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={discount.value}
+                    onChange={(e) => setDiscount({ ...discount, value: parseFloat(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder={`Enter ${discount.type === 'percentage' ? '%' : '₹'} amount`}
+                  />
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <motion.button
+                  onClick={() => setIsDiscountModalOpen(false)}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                >
+                  Cancel
+                </motion.button>
+                <motion.button
+                  onClick={handleApplyDiscount}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Apply Discount
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Footer */}
       <div className="bg-white/80 backdrop-blur-md border-t border-gray-200 p-3 flex justify-between shadow-sm">
         <motion.button
@@ -906,7 +1281,18 @@ const KOTInterface = ({
           </div>
 
           <motion.button
-            onClick={() => onAddToBill(null, true, paymentMethod)}
+            onClick={() => setIsDiscountModalOpen(true)}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
+            className="px-4 py-2 bg-gradient-to-r from-yellow-600 to-yellow-500 text-white rounded-lg hover:from-yellow-700 hover:to-yellow-600 shadow-md transition-all flex items-center"
+            title="Apply Discount"
+          >
+            <Percent size={18} className="mr-2" />
+            {discount.value > 0 ? `${discount.value}${discount.type === 'percentage' ? '%' : '₹'}` : 'Discount'}
+          </motion.button>
+
+          <motion.button
+            onClick={handleGenerateBill}
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-500 text-white rounded-lg hover:from-green-700 hover:to-green-600 shadow-md transition-all flex items-center"
