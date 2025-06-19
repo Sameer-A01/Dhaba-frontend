@@ -327,7 +327,7 @@ const handlePrintBill = () => {
       <style>
         @page { 
           size: 80mm auto; 
-          margin: 2mm; 
+          margin: 1mm; 
         }
         
         @media print {
@@ -342,71 +342,71 @@ const handlePrintBill = () => {
         body { 
           font-family: 'Courier', monospace; 
           margin: 0 auto; 
-          padding: 2mm; 
+          padding: 1mm; 
           color: #000000; 
-          font-size: 12px; 
-          line-height: 1.5; 
+          font-size: 14.5px; 
+          line-height: 1.6; 
           width: 76mm; 
           background: white; 
+          font-weight: 950;
         }
         
         .invoice-container { 
           width: 100%; 
           max-width: 76mm; 
           margin: 0 auto; 
-          padding: 2mm;
+          padding: 1mm;
           box-sizing: border-box;
         }
         
         .company-header { 
           text-align: center; 
-          margin-bottom: 3mm; 
-          padding-bottom: 2mm; 
+          margin-bottom: 2mm; 
+          padding-bottom: 1mm; 
         }
         
         .company-name { 
-          font-size: 14px; 
-          margin: 0 0 2mm 0; 
+          font-size: 16px; 
+          margin: 0 0 1mm 0; 
           font-weight: 900; 
           color: #000000;
-          letter-spacing: 0.5px;
         }
         
         .company-details { 
           margin: 1mm 0; 
-          font-size: 11px; 
+          font-size: 13px; 
           color: #000000;
-          line-height: 1.5;
-          font-weight: 700;
+          line-height: 1.6;
+          font-weight: 900;
         }
         
         .gst-number {
           font-weight: 900;
-          font-size: 11px;
+          font-size: 13px;
           margin-top: 1mm;
           color: #000000;
         }
         
         .invoice-details { 
-          margin-bottom: 3mm; 
-          padding-bottom: 2mm; 
-          font-size: 11px;
+          margin-bottom: 2mm; 
+          padding-bottom: 1mm; 
+          font-size: 13px;
         }
         
         .detail-row { 
           display: flex; 
           justify-content: space-between;
-          margin: 1mm 0;
+          margin: 0.5mm 0;
         }
         
         .detail-label {
-          font-weight: 800;
+          font-weight: 900;
           color: #000000;
         }
         
         .items-header {
           font-weight: 900;
-          font-size: 13px;
+          font-size: 15px;
           text-align: center;
           margin: 2mm 0;
           padding: 1mm 0;
@@ -415,26 +415,26 @@ const handlePrintBill = () => {
         .items-table { 
           width: 100%; 
           border-collapse: collapse; 
-          margin-bottom: 3mm; 
-          font-size: 11px;
+          margin-bottom: 2mm; 
+          font-size: 13px;
         }
         
         .items-table th { 
           text-align: left; 
           font-weight: 900; 
-          padding: 1mm 0;
+          padding: 0.5mm 0;
         }
         
         .items-table td { 
-          padding: 1mm 0;
+          padding: 0.5mm 0;
           vertical-align: top;
-          font-weight: 700;
+          font-weight: 900;
         }
         
         .item-name {
           max-width: 35mm;
           word-break: break-word;
-          font-weight: 800;
+          font-weight: 900;
         }
         
         .align-right {
@@ -443,19 +443,19 @@ const handlePrintBill = () => {
         
         .summary-section { 
           margin-top: 2mm;
-          font-size: 12px;
+          font-size: 14px;
         }
         
         .summary-row { 
           display: flex; 
           justify-content: space-between;
-          margin: 1mm 0;
-          padding: 1mm 0;
+          margin: 0.5mm 0;
+          padding: 0.5mm 0;
         }
         
         .summary-label {
           color: #000000;
-          font-weight: 800;
+          font-weight: 900;
         }
         
         .summary-value {
@@ -468,43 +468,41 @@ const handlePrintBill = () => {
         
         .total-row {
           margin: 2mm 0;
-          padding: 2mm 0;
-          font-size: 13px;
+          padding: 1mm 0;
+          font-size: 15px;
           font-weight: 900;
         }
         
         .footer { 
           text-align: center; 
-          margin-top: 3mm; 
-          font-size: 11px; 
-          padding-top: 2mm; 
+          margin-top: 2mm; 
+          font-size: 13px; 
+          padding-top: 1mm; 
           color: #000000;
         }
         
         .thank-you {
           font-weight: 900;
-          font-size: 13px;
+          font-size: 15px;
           color: #000000;
           margin-bottom: 1mm;
-          letter-spacing: 0.5px;
         }
         
         .return-policy {
-          font-size: 10px;
+          font-size: 12px;
           margin-top: 1mm;
-          font-style: normal;
-          font-weight: 700;
+          font-weight: 900;
         }
         
         /* Print-specific adjustments */
         @media print {
           .invoice-container {
-            padding: 1mm;
+            padding: 0.5mm;
           }
           
           body {
             padding: 0;
-            font-size: 11px;
+            font-size: 13px;
           }
         }
       </style>
