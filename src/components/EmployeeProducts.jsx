@@ -334,16 +334,18 @@ const handlePrintBill = () => {
           body { 
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
+            -webkit-font-smoothing: none;
+            font-smooth: never;
           }
         }
         
         body { 
-          font-family: 'Arial', sans-serif; 
+          font-family: 'Courier', monospace; 
           margin: 0 auto; 
           padding: 2mm; 
-          color: #333; 
-          font-size: 11px; 
-          line-height: 1.4; 
+          color: #000000; 
+          font-size: 12px; 
+          line-height: 1.5; 
           width: 76mm; 
           background: white; 
         }
@@ -352,93 +354,87 @@ const handlePrintBill = () => {
           width: 100%; 
           max-width: 76mm; 
           margin: 0 auto; 
-          border: 1px solid #e0e0e0;
-          padding: 3mm;
+          padding: 2mm;
           box-sizing: border-box;
         }
         
         .company-header { 
           text-align: center; 
-          margin-bottom: 4mm; 
-          padding-bottom: 3mm; 
-          border-bottom: 1px solid #e0e0e0;
+          margin-bottom: 3mm; 
+          padding-bottom: 2mm; 
         }
         
         .company-name { 
-          font-size: 16px; 
+          font-size: 14px; 
           margin: 0 0 2mm 0; 
-          font-weight: bold; 
-          color: #222;
+          font-weight: 900; 
+          color: #000000;
           letter-spacing: 0.5px;
         }
         
         .company-details { 
-          margin: 1.5mm 0; 
-          font-size: 10px; 
-          color: #555;
-          line-height: 1.4;
+          margin: 1mm 0; 
+          font-size: 11px; 
+          color: #000000;
+          line-height: 1.5;
+          font-weight: 700;
         }
         
         .gst-number {
-          font-weight: bold;
-          font-size: 10px;
-          margin-top: 2mm;
-          color: #555;
+          font-weight: 900;
+          font-size: 11px;
+          margin-top: 1mm;
+          color: #000000;
         }
         
         .invoice-details { 
-          margin-bottom: 4mm; 
-          padding-bottom: 3mm; 
-          border-bottom: 1px dashed #e0e0e0;
-          font-size: 10px;
+          margin-bottom: 3mm; 
+          padding-bottom: 2mm; 
+          font-size: 11px;
         }
         
         .detail-row { 
           display: flex; 
           justify-content: space-between;
-          margin: 1.5mm 0;
+          margin: 1mm 0;
         }
         
         .detail-label {
-          font-weight: bold;
-          color: #555;
+          font-weight: 800;
+          color: #000000;
         }
         
         .items-header {
-          font-weight: bold;
-          font-size: 12px;
+          font-weight: 900;
+          font-size: 13px;
           text-align: center;
-          margin: 3mm 0;
-          padding: 2mm 0;
-          border-top: 1px solid #e0e0e0;
-          border-bottom: 1px solid #e0e0e0;
-          background-color: #f8f8f8;
+          margin: 2mm 0;
+          padding: 1mm 0;
         }
         
         .items-table { 
           width: 100%; 
           border-collapse: collapse; 
-          margin-bottom: 4mm; 
-          font-size: 10px;
+          margin-bottom: 3mm; 
+          font-size: 11px;
         }
         
         .items-table th { 
           text-align: left; 
-          font-weight: bold; 
-          padding: 2mm 0;
-          border-bottom: 2px solid #e0e0e0;
+          font-weight: 900; 
+          padding: 1mm 0;
         }
         
         .items-table td { 
-          padding: 1.5mm 0; 
-          border-bottom: 1px dotted #e0e0e0;
+          padding: 1mm 0;
           vertical-align: top;
+          font-weight: 700;
         }
         
         .item-name {
           max-width: 35mm;
           word-break: break-word;
-          font-weight: 500;
+          font-weight: 800;
         }
         
         .align-right {
@@ -446,73 +442,69 @@ const handlePrintBill = () => {
         }
         
         .summary-section { 
-          margin-top: 3mm;
-          font-size: 11px;
+          margin-top: 2mm;
+          font-size: 12px;
         }
         
         .summary-row { 
           display: flex; 
           justify-content: space-between;
-          margin: 2mm 0;
+          margin: 1mm 0;
           padding: 1mm 0;
         }
         
         .summary-label {
-          color: #555;
+          color: #000000;
+          font-weight: 800;
         }
         
         .summary-value {
-          font-weight: bold;
+          font-weight: 900;
         }
         
         .subtotal-row {
-          border-top: 1px dashed #e0e0e0;
-          padding-top: 2mm;
+          padding-top: 1mm;
         }
         
         .total-row {
-          border-top: 2px solid #e0e0e0;
-          border-bottom: 2px solid #e0e0e0;
-          margin: 3mm 0;
-          padding: 2.5mm 0;
-          font-size: 12px;
-          font-weight: bold;
-          background-color: #f8f8f8;
+          margin: 2mm 0;
+          padding: 2mm 0;
+          font-size: 13px;
+          font-weight: 900;
         }
         
         .footer { 
           text-align: center; 
-          margin-top: 4mm; 
-          font-size: 10px; 
-          padding-top: 3mm; 
-          border-top: 1px solid #e0e0e0;
-          color: #555;
+          margin-top: 3mm; 
+          font-size: 11px; 
+          padding-top: 2mm; 
+          color: #000000;
         }
         
         .thank-you {
-          font-weight: bold;
-          font-size: 12px;
-          color: #333;
-          margin-bottom: 2mm;
+          font-weight: 900;
+          font-size: 13px;
+          color: #000000;
+          margin-bottom: 1mm;
           letter-spacing: 0.5px;
         }
         
         .return-policy {
-          font-size: 9px;
-          margin-top: 2mm;
-          font-style: italic;
+          font-size: 10px;
+          margin-top: 1mm;
+          font-style: normal;
+          font-weight: 700;
         }
         
         /* Print-specific adjustments */
         @media print {
           .invoice-container {
-            border: none;
-            padding: 2mm;
+            padding: 1mm;
           }
           
           body {
             padding: 0;
-            font-size: 10px;
+            font-size: 11px;
           }
         }
       </style>
