@@ -340,7 +340,7 @@ const handlePrintBill = () => {
         }
         
         body { 
-          font-family: 'Courier', monospace; 
+          font-family: monospace, sans-serif;
           margin: 0 auto; 
           padding: 1mm; 
           color: #000000; 
@@ -348,7 +348,7 @@ const handlePrintBill = () => {
           line-height: 1.6; 
           width: 76mm; 
           background: white; 
-          font-weight: 950;
+          font-weight: 750;
         }
         
         .invoice-container { 
