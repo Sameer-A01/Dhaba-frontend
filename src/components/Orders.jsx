@@ -2,16 +2,18 @@ import React, { useState, useEffect, useRef } from 'react';
 import axiosInstance from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import EditOrderModal from '../components/EditModel';
+import DeleteOrderModal from '../components/DeleteOrderModal';
+import DeletedOrdersModal from './DeletedOrdersModal.jsx';
 import { 
   FiPackage, FiUser, FiMapPin, FiCalendar, FiDollarSign, 
   FiFilter, FiSearch, FiChevronDown, FiChevronUp, 
   FiPrinter, FiTrendingUp, FiList, FiClock, 
-  FiCheckCircle, FiXCircle, FiRefreshCw, FiEdit
+  FiCheckCircle, FiXCircle, FiRefreshCw, FiEdit, FiTrash2, FiArchive
 } from 'react-icons/fi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 
-// Helper functions
+// Helper functions remain unchanged
 const calculateTodaySales = (orders) => {
   const today = new Date().toISOString().split('T')[0];
   return orders.reduce((total, order) => {
@@ -71,7 +73,7 @@ const getKOTStatusBadge = (status) => {
   }
 };
 
-// Company info from localStorage (matching POSPage.jsx)
+// Company info from localStorage
 const companyInfo = {
   name: localStorage.getItem("company_name") || "ROYAL KING DHABA",
   address: localStorage.getItem("company_address") || "Purvanchal Highway Road, UP, Azamgarh 276001",
@@ -90,6 +92,9 @@ const Orders = () => {
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isDeletedOrdersModalOpen, setIsDeletedOrdersModalOpen] = useState(false);
+  const [deletingOrder, setDeletingOrder] = useState(null);
   const [editingOrder, setEditingOrder] = useState(null);
   const [products, setProducts] = useState([]);
   const [editForm, setEditForm] = useState({ products: [], discount: null, notes: '' });
@@ -108,7 +113,7 @@ const Orders = () => {
         headers: { Authorization: `Bearer ${localStorage.getItem('ims_token')}` },
       });
       if (response.data.success) {
-        setOrders(response.data.orders || []);
+        setOrders(response.data.orders.filter(order => order.status !== 'deleted') || []);
         setError(null);
       } else {
         throw new Error(response.data.error || 'Failed to fetch orders');
@@ -154,17 +159,21 @@ const Orders = () => {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (isEditModalOpen) {
+      if (isEditModalOpen || isDeleteModalOpen || isDeletedOrdersModalOpen) {
         if (e.key === 'Escape') {
           setIsEditModalOpen(false);
+          setIsDeleteModalOpen(false);
+          setIsDeletedOrdersModalOpen(false);
         } else if (e.key === 'Enter' && document.activeElement !== searchInputRef.current) {
-          addProductToEditForm();
+          if (isEditModalOpen) {
+            addProductToEditForm();
+          }
         }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isEditModalOpen]);
+  }, [isEditModalOpen, isDeleteModalOpen, isDeletedOrdersModalOpen]);
 
   const refreshOrders = () => {
     setRefreshing(true);
@@ -226,7 +235,6 @@ const Orders = () => {
     setExpandedOrder(expandedOrder === orderId ? null : orderId);
   };
 
-  // Calculate bill totals (matching POSPage.jsx and respecting order-specific discount)
   const calculateDiscount = (subtotal, order) => {
     let discountAmount = 0;
     if (order.discount?.type && order.discount?.value) {
@@ -236,7 +244,6 @@ const Orders = () => {
         discountAmount = order.discount.value;
       }
     } else {
-      // Fallback to companyInfo.discount only if no order-specific discount
       const discountPercent = companyInfo.discount || 0;
       discountAmount = (subtotal * (discountPercent / 100));
     }
@@ -258,322 +265,318 @@ const Orders = () => {
     return (subtotalAfterDiscount + tax).toFixed(2);
   };
 
-  const printOrder = (order) => {
-    const printWindow = window.open('', '_blank');
-    const discountValue = order.discount?.value || companyInfo.discount || 0;
-    const discountType = order.discount?.type || 'percentage';
-    const discountDisplay = discountType === 'percentage' ? `${discountValue}%` : `₹${discountValue}`;
+const printOrder = (order) => {
+  const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
+  if (!printWindow) {
+    alert("Pop-up blocked! Please allow pop-ups to print invoice.");
+    return;
+  }
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Invoice - ${companyInfo.name}</title>
-        <meta charset="UTF-8">
-        <style>
-          @page { 
-            size: 80mm auto; 
-            margin: 2mm; 
-          }
-          
-          @media print {
-            body { 
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-            }
-          }
-          
+  const totalItems = order.products.reduce((sum, item) => sum + (item.quantity || 0), 0);
+  const discountLabel = order.discount?.type === "percentage"
+    ? `Discount (${order.discount?.value || 0}%):`
+    : `Discount (₹${order.discount?.value || 0}):`;
+
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>Invoice - ${companyInfo.name}</title>
+      <meta charset="UTF-8">
+      <style>
+        @page { 
+          size: 80mm auto; 
+          margin: 1mm; 
+        }
+        
+        @media print {
           body { 
-            font-family: 'Arial', sans-serif; 
-            margin: 0 auto; 
-            padding: 2mm; 
-            color: #333; 
-            font-size: 11px; 
-            line-height: 1.4; 
-            width: 76mm; 
-            background: white; 
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+            -webkit-font-smoothing: none;
+            font-smooth: never;
+          }
+        }
+        
+        body { 
+          font-family: monospace, sans-serif;
+          margin: 0 auto; 
+          padding: 1mm; 
+          color: #000000; 
+          font-size: 14.5px; 
+          line-height: 1.6; 
+          width: 76mm; 
+          background: white; 
+          font-weight: 750;
+        }
+        
+        .invoice-container { 
+          width: 100%; 
+          max-width: 76mm; 
+          margin: 0 auto; 
+          padding: 1mm;
+          box-sizing: border-box;
+        }
+        
+        .company-header { 
+          text-align: center; 
+          margin-bottom: 2mm; 
+          padding-bottom: 1mm; 
+        }
+        
+        .company-name { 
+          font-size: 16px; 
+          margin: 0 0 1mm 0; 
+          font-weight: 900; 
+          color: #000000;
+        }
+        
+        .company-details { 
+          margin: 1mm 0; 
+          font-size: 13px; 
+          color: #000000;
+          line-height: 1.6;
+          font-weight: 900;
+        }
+        
+        .gst-number {
+          font-weight: 900;
+          font-size: 13px;
+          margin-top: 1mm;
+          color: #000000;
+        }
+        
+        .invoice-details { 
+          margin-bottom: 2mm; 
+          padding-bottom: 1mm; 
+          font-size: 13px;
+        }
+        
+        .detail-row { 
+          display: flex; 
+          justify-content: space-between;
+          margin: 0.5mm 0;
+        }
+        
+        .detail-label {
+          font-weight: 900;
+          color: #000000;
+        }
+        
+        .items-header {
+          font-weight: 900;
+          font-size: 15px;
+          text-align: center;
+          margin: 2mm 0;
+          padding: 1mm 0;
+        }
+        
+        .items-table { 
+          width: 100%; 
+          border-collapse: collapse; 
+          margin-bottom: 2mm; 
+          font-size: 13px;
+        }
+        
+        .items-table th { 
+          text-align: left; 
+          font-weight: 900; 
+          padding: 0.5mm 0;
+        }
+        
+        .items-table td { 
+          padding: 0.5mm 0;
+          vertical-align: top;
+          font-weight: 900;
+        }
+        
+        .item-name {
+          max-width: 35mm;
+          word-break: break-word;
+          font-weight: 900;
+        }
+        
+        .align-right {
+          text-align: right;
+        }
+        
+        .summary-section { 
+          margin-top: 2mm;
+          font-size: 14px;
+        }
+        
+        .summary-row { 
+          display: flex; 
+          justify-content: space-between;
+          margin: 0.5mm 0;
+          padding: 0.5mm 0;
+        }
+        
+        .summary-label {
+          color: #000000;
+          font-weight: 900;
+        }
+        
+        .summary-value {
+          font-weight: 900;
+        }
+        
+        .subtotal-row {
+          padding-top: 1mm;
+        }
+        
+        .total-row {
+          margin: 2mm 0;
+          padding: 1mm 0;
+          font-size: 15px;
+          font-weight: 900;
+        }
+        
+        .footer { 
+          text-align: center; 
+          margin-top: 2mm; 
+          font-size: 13px; 
+          padding-top: 1mm; 
+          color: #000000;
+        }
+        
+        .thank-you {
+          font-weight: 900;
+          font-size: 15px;
+          color: #000000;
+          margin-bottom: 1mm;
+        }
+        
+        .return-policy {
+          font-size: 12px;
+          margin-top: 1mm;
+          font-weight: 900;
+        }
+        
+        /* Print-specific adjustments */
+        @media print {
+          .invoice-container {
+            padding: 0.5mm;
           }
           
-          .invoice-container { 
-            width: 100%; 
-            max-width: 76mm; 
-            margin: 0 auto; 
-            border: 1px solid #e0e0e0;
-            padding: 3mm;
-            box-sizing: border-box;
+          body {
+            padding: 0;
+            font-size: 13px;
           }
-          
-          .company-header { 
-            text-align: center; 
-            margin-bottom: 4mm; 
-            padding-bottom: 3mm; 
-            border-bottom: 1px solid #e0e0e0;
-          }
-          
-          .company-name { 
-            font-size: 16px; 
-            margin: 0 0 2mm 0; 
-            font-weight: bold; 
-            color: #222;
-            letter-spacing: 0.5px;
-          }
-          
-          .company-details { 
-            margin: 1.5mm 0; 
-            font-size: 10px; 
-            color: #555;
-            line-height: 1.4;
-          }
-          
-          .gst-number {
-            font-weight: bold;
-            font-size: 10px;
-            margin-top: 2mm;
-            color: #555;
-          }
-          
-          .invoice-details { 
-            margin-bottom: 4mm; 
-            padding-bottom: 3mm; 
-            border-bottom: 1px dashed #e0e0e0;
-            font-size: 10px;
-          }
-          
-          .detail-row { 
-            display: flex; 
-            justify-content: space-between;
-            margin: 1.5mm 0;
-          }
-          
-          .detail-label {
-            font-weight: bold;
-            color: #555;
-          }
-          
-          .items-header {
-            font-weight: bold;
-            font-size: 12px;
-            text-align: center;
-            margin: 3mm 0;
-            padding: 2mm 0;
-            border-top: 1px solid #e0e0e0;
-            border-bottom: 1px solid #e0e0e0;
-            background-color: #f8f8f8;
-          }
-          
-          .items-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-bottom: 4mm; 
-            font-size: 10px;
-          }
-          
-          .items-table th { 
-            text-align: left; 
-            font-weight: bold; 
-            padding: 2mm 0;
-            border-bottom: 2px solid #e0e0e0;
-          }
-          
-          .items-table td { 
-            padding: 1.5mm 0; 
-            border-bottom: 1px dotted #e0e0e0;
-            vertical-align: top;
-          }
-          
-          .item-name {
-            max-width: 35mm;
-            word-break: break-word;
-            font-weight: 500;
-          }
-          
-          .align-right {
-            text-align: right;
-          }
-          
-          .summary-section { 
-            margin-top: 3mm;
-            font-size: 11px;
-          }
-          
-          .summary-row { 
-            display: flex; 
-            justify-content: space-between;
-            margin: 2mm 0;
-            padding: 1mm 0;
-          }
-          
-          .summary-label {
-            color: #555;
-          }
-          
-          .summary-value {
-            font-weight: bold;
-          }
-          
-          .subtotal-row {
-            border-top: 1px dashed #e0e0e0;
-            padding-top: 2mm;
-          }
-          
-          .total-row {
-            border-top: 2px solid #e0e0e0;
-            border-bottom: 2px solid #e0e0e0;
-            margin: 3mm 0;
-            padding: 2.5mm 0;
-            font-size: 12px;
-            font-weight: bold;
-            background-color: #f8f8f8;
-          }
-          
-          .footer { 
-            text-align: center; 
-            margin-top: 4mm; 
-            font-size: 10px; 
-            padding-top: 3mm; 
-            border-top: 1px solid #e0e0e0;
-            color: #555;
-          }
-          
-          .thank-you {
-            font-weight: bold;
-            font-size: 12px;
-            color: #333;
-            margin-bottom: 2mm;
-            letter-spacing: 0.5px;
-          }
-          
-          .return-policy {
-            font-size: 9px;
-            margin-top: 2mm;
-            font-style: italic;
-          }
-          
-          /* Print-specific adjustments */
-          @media print {
-            .invoice-container {
-              border: none;
-              padding: 2mm;
-            }
-            
-            body {
-              padding: 0;
-              font-size: 10px;
-            }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="invoice-container">
-          <div class="company-header">
-            <div class="company-name">${companyInfo.name.toUpperCase()}</div>
-            <div class="company-details">
-              ${companyInfo.address}<br>
-              📞 ${companyInfo.phone} | ✉️ ${companyInfo.email}
-            </div>
-            <div class="gst-number">GSTIN: 09ABKFR9647R1ZV</div>
+        }
+      </style>
+    </head>
+    <body>
+      <div class="invoice-container">
+        <div class="company-header">
+          <div class="company-name">${companyInfo.name.toUpperCase()}</div>
+          <div class="company-details">
+            ${companyInfo.address}<br>
+            📞 ${companyInfo.phone} | ✉️ ${companyInfo.email}
           </div>
-          
-          <div class="invoice-details">
-            <div class="detail-row">
-              <span class="detail-label">Invoice #:</span>
-              <span>${invoiceNum}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Date:</span>
-              <span>${new Date(order.orderDate).toLocaleDateString('en-IN')}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Time:</span>
-              <span>${new Date(order.orderDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Cashier:</span>
-              <span>${order.user?.name || "Admin"}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Room:</span>
-              <span>${order.room?.roomName || "N/A"}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Table:</span>
-              <span>${order.table?.tableNumber || "N/A"}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Payment Method:</span>
-              <span>${order.paymentMethod ? order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1) : "Cash"}</span>
-            </div>
+          <div class="gst-number">GSTIN: 09ABKFR9647R1ZV</div>
+        </div>
+        
+        <div class="invoice-details">
+          <div class="detail-row">
+            <span class="detail-label">Invoice #:</span>
+            <span>${invoiceNum}</span>
           </div>
-          
-          <div class="items-header">ORDER DETAILS</div>
-          
-          <table class="items-table">
-            <thead>
-              <tr>
-                <th>ITEM</th>
-                <th class="align-right">QTY</th>
-                <th class="align-right">PRICE</th>
-                <th class="align-right">TOTAL</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${order.products
-                .map(
-                  (item) => `
-                <tr>
-                  <td class="item-name">${item.product?.name || "N/A"}</td>
-                  <td class="align-right">${item.quantity || 0}</td>
-                  <td class="align-right">₹${(item.price || 0).toFixed(2)}</td>
-                  <td class="align-right">₹${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</td>
-                </tr>
-              `
-                )
-                .join("")}
-            </tbody>
-          </table>
-          
-          <div class="summary-section">
-            <div class="summary-row">
-              <span class="summary-label">Subtotal:</span>
-              <span class="summary-value">₹${(order.subTotal || 0).toFixed(2)}</span>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">Discount (${discountDisplay}):</span>
-              <span class="summary-value">- ₹${calculateDiscount(order.subTotal || 0, order)}</span>
-            </div>
-            <div class="summary-row subtotal-row">
-              <span class="summary-label">After Discount:</span>
-              <span class="summary-value">₹${calculateSubtotalAfterDiscount(order.subTotal || 0, order)}</span>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">GST (${companyInfo.taxRate}%):</span>
-              <span class="summary-value">₹${calculateTax(calculateSubtotalAfterDiscount(order.subTotal || 0, order))}</span>
-            </div>
-            <div class="summary-row total-row">
-              <span>GRAND TOTAL:</span>
-              <span>₹${calculateGrandTotal(order.subTotal || 0, order)}</span>
-            </div>
+          <div class="detail-row">
+            <span class="detail-label">Date:</span>
+            <span>${new Date(order.orderDate).toLocaleDateString('en-IN')}</span>
           </div>
-          
-          <div class="footer">
-            <div class="thank-you">THANK YOU FOR YOUR VISIT</div>
-            <div>We appreciate your business!</div>
+          <div class="detail-row">
+            <span class="detail-label">Time:</span>
+            <span>${new Date(order.orderDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Cashier:</span>
+            <span>${order.user?.name || "Admin"}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Room:</span>
+            <span>${order.room?.roomName || "N/A"}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Table:</span>
+            <span>${order.table?.tableNumber || "N/A"}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Payment Method:</span>
+            <span>${order.paymentMethod ? order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1) : "Cash"}</span>
           </div>
         </div>
         
-        <script>
-          window.onload = function() {
-            setTimeout(() => {
-              window.print();
-              setTimeout(() => window.close(), 1000);
-            }, 500);
-          };
-        </script>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
+        <div class="items-header">ORDER DETAILS</div>
+        
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th>ITEM</th>
+              <th class="align-right">QTY</th>
+              <th class="align-right">PRICE</th>
+              <th class="align-right">TOTAL</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${order.products
+              .map(
+                (item) => `
+              <tr>
+                <td class="item-name">${item.product?.name || "N/A"}</td>
+                <td class="align-right">${item.quantity || 0}</td>
+                <td class="align-right">₹${(item.price || 0).toFixed(2)}</td>
+                <td class="align-right">₹${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</td>
+              </tr>
+            `
+              )
+              .join("")}
+          </tbody>
+        </table>
+        
+        <div class="summary-section">
+          <div class="summary-row">
+            <span class="summary-label">Subtotal:</span>
+            <span class="summary-value">₹${(order.subTotal || 0).toFixed(2)}</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">${discountLabel}</span>
+            <span class="summary-value">- ₹${calculateDiscount(order.subTotal || 0, order)}</span>
+          </div>
+          <div class="summary-row subtotal-row">
+            <span class="summary-label">After Discount:</span>
+            <span class="summary-value">₹${calculateSubtotalAfterDiscount(order.subTotal || 0, order)}</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">GST (${companyInfo.taxRate}%):</span>
+            <span class="summary-value">₹${calculateTax(calculateSubtotalAfterDiscount(order.subTotal || 0, order))}</span>
+          </div>
+          <div class="summary-row total-row">
+            <span>GRAND TOTAL:</span>
+            <span>₹${calculateGrandTotal(order.subTotal || 0, order)}</span>
+          </div>
+        </div>
+        
+        <div class="footer">
+          <div class="thank-you">THANK YOU FOR YOUR VISIT</div>
+          <div>We appreciate your business!</div>
+        </div>
+      </div>
+      
+      <script>
+        window.onload = function() {
+          setTimeout(() => {
+            window.print();
+            setTimeout(() => window.close(), 1000);
+          }, 500);
+        };
+      </script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+};
 
   const openEditModal = async (order) => {
     try {
@@ -600,6 +603,33 @@ const Orders = () => {
     } catch (err) {
       console.error("Error fetching order details:", err);
       toast.error('Failed to load order details. Please try again.');
+    }
+  };
+
+  const openDeleteModal = (order) => {
+    console.log('Opening delete modal for order:', order._id); // Debug log
+    setDeletingOrder(order);
+    setIsDeleteModalOpen(true);
+  };
+
+  const handleDeleteOrder = async (orderId, reason) => {
+    try {
+      console.log('Deleting order:', orderId, 'Reason:', reason); // Debug log
+      const response = await axiosInstance.delete(`/order/delete/${orderId}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('ims_token')}` },
+        data: { reason }
+      });
+      if (response.data.success) {
+        setOrders(orders.filter(o => o._id !== orderId));
+        setIsDeleteModalOpen(false);
+        setDeletingOrder(null);
+        toast.success('Order deleted successfully');
+      } else {
+        throw new Error(response.data.error || 'Failed to delete order');
+      }
+    } catch (err) {
+      console.error("Error deleting order:", err);
+      toast.error('Failed to delete order. Please try again.');
     }
   };
 
@@ -713,10 +743,21 @@ const Orders = () => {
                 openEditModal(order);
               }}
               className="text-yellow-600 hover:text-yellow-800 p-1"
-              disabled={order.status === 'completed' || order.status === 'cancelled'}
+              disabled={order.status === 'completed' || order.status === 'cancelled' || order.status === 'deleted'}
               aria-label="Edit order"
             >
               <FiEdit size={16} />
+            </button>
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                openDeleteModal(order);
+              }}
+              className="text-red-600 hover:text-red-800 p-1"
+              disabled={order.status === 'deleted'}
+              aria-label="Delete order"
+            >
+              <FiTrash2 size={16} />
             </button>
             <button 
               onClick={(e) => {
@@ -777,6 +818,11 @@ const Orders = () => {
             <p className="text-gray-500">KOTs</p>
             <p className="font-medium">{order.kots?.length || 0} KOT{(order.kots?.length || 0) !== 1 ? 's' : ''}</p>
           </div>
+
+          <div>
+            <p className="text-gray-500">Status</p>
+            <p className="font-medium">{order.status || 'N/A'}</p>
+          </div>
         </div>
         
         <AnimatePresence>
@@ -820,6 +866,13 @@ const Orders = () => {
                   <p className="font-medium text-gray-800">Total</p>
                   <p className="font-bold text-lg text-green-600">{formatRupee(order.totalAmount || 0)}</p>
                 </div>
+                {order.notes && (
+                  <div className="mt-4">
+                    <p className="text-sm text-gray-600">
+                      <strong>Notes:</strong> {order.notes}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {order.kots && order.kots.length > 0 ? (
@@ -892,15 +945,25 @@ const Orders = () => {
               {user.role === 'admin' ? 'View and manage all orders with KOT details' : 'Track your order history'}
             </p>
           </div>
-          <button 
-            onClick={refreshOrders}
-            disabled={refreshing}
-            className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
-            title="Refresh orders"
-            aria-label="Refresh orders"
-          >
-            <FiRefreshCw className={refreshing ? "animate-spin" : ""} size={18} />
-          </button>
+          <div className="flex space-x-2">
+            <button 
+              onClick={() => setIsDeletedOrdersModalOpen(true)}
+              className="p-2 text-gray-600 hover:text-purple-600 transition-colors"
+              title="View deleted orders"
+              aria-label="View deleted orders"
+            >
+              <FiArchive size={18} />
+            </button>
+            <button 
+              onClick={refreshOrders}
+              disabled={refreshing}
+              className="p-2 text-gray-600 hover:text-blue-600 transition-colors"
+              title="Refresh orders"
+              aria-label="Refresh orders"
+            >
+              <FiRefreshCw className={refreshing ? "animate-spin" : ""} size={18} />
+            </button>
+          </div>
         </div>
         
         <div className="flex flex-col sm:flex-row gap-3 w-full">
@@ -975,7 +1038,6 @@ const Orders = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5 mb-6">
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100">
           <div className="flex items-center justify-between">
@@ -1021,7 +1083,6 @@ const Orders = () => {
         </div>
       </div>
 
-      {/* Enhanced Edit Order Modal */}
       <EditOrderModal
         isEditModalOpen={isEditModalOpen}
         setIsEditModalOpen={setIsEditModalOpen}
@@ -1041,7 +1102,19 @@ const Orders = () => {
         formatRupee={formatRupee}
       />
 
-      {/* Mobile Order Cards */}
+      <DeleteOrderModal
+        isDeleteModalOpen={isDeleteModalOpen}
+        setIsDeleteModalOpen={setIsDeleteModalOpen}
+        deletingOrder={deletingOrder}
+        handleDeleteOrder={handleDeleteOrder}
+      />
+
+      <DeletedOrdersModal
+        isDeletedOrdersModalOpen={isDeletedOrdersModalOpen}
+        setIsDeletedOrdersModalOpen={setIsDeletedOrdersModalOpen}
+        formatRupee={formatRupee}
+      />
+
       <div className="md:hidden">
         {loading ? (
           <div className="flex justify-center py-10">
@@ -1066,7 +1139,6 @@ const Orders = () => {
         )}
       </div>
 
-      {/* Desktop Orders Table */}
       <div className="hidden md:block bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -1203,10 +1275,21 @@ const Orders = () => {
                             openEditModal(order);
                           }}
                           className="text-yellow-600 hover:text-yellow-800 mr-3"
-                          disabled={order.status === 'completed' || order.status === 'cancelled'}
+                          disabled={order.status === 'completed' || order.status === 'cancelled' || order.status === 'deleted'}
                           aria-label="Edit order"
                         >
                           <FiEdit size={16} />
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openDeleteModal(order);
+                          }}
+                          className="text-red-600 hover:text-red-800 mr-3"
+                          disabled={order.status === 'deleted'}
+                          aria-label="Delete order"
+                        >
+                          <FiTrash2 size={16} />
                         </button>
                         <button 
                           onClick={(e) => {
@@ -1343,7 +1426,6 @@ const Orders = () => {
         </div>
       </div>
 
-      {/* Pagination */}
       {filteredOrders.length > 0 && (
         <div className="mt-4 flex justify-center sm:justify-end">
           <nav className="relative z-0 inline-flex shadow-sm -space-x-px" aria-label="Pagination">

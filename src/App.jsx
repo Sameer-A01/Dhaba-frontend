@@ -21,6 +21,7 @@ import Expense from "./components/Expense";
 import Table from "./components/Table";
 import KOTInterface from "./components/KOTInterface";
 import ActiveKOTsPage from "./components/ActiveKOTsPage";
+// import DeletionHistoryPage from "./components/DeletionHistoryPage";
 
 const App = () => (
   <AuthProvider>
