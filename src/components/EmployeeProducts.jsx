@@ -250,297 +250,121 @@ const handlePrintBill = () => {
   }
 
   const totalItems = billData.items.reduce((sum, item) => sum + item.quantity, 0);
-  const discountLabel = billData.discount?.type === "percentage"
-    ? `Discount (${billData.discount?.value || 0}%):`
-    : `Discount (₹${billData.discount?.value || 0}):`;
+  const discount = calculateDiscount();
+  const subtotal = billData.totalAmount.toFixed(2);
+  const afterDiscount = calculateSubtotalAfterDiscount();
+  const gst = calculateTax();
+  const grandTotal = calculateGrandTotal();
+  const totalSavings = discount;
 
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Invoice - ${companyInfo.name}</title>
       <meta charset="UTF-8">
+      <title>Bill - ${companyInfo.name}</title>
       <style>
-        @page { 
-          size: 80mm auto; 
-          margin: 1mm; 
+        @page { size: 80mm auto; margin: 1.5mm; }
+
+        body {
+          font-family: 'Courier New', monospace;
+          font-size: 13.5px;
+          font-weight: 900;
+          width: 76mm;
+          padding: 2mm;
+          margin: 0;
+          color: #000000;
         }
-        
+
         @media print {
-          body { 
+          body {
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
             -webkit-font-smoothing: none;
             font-smooth: never;
           }
         }
-        
-        body { 
-          font-family: monospace, sans-serif;
-          margin: 0 auto; 
-          padding: 1mm; 
-          color: #000000; 
-          font-size: 14.5px; 
-          line-height: 1.6; 
-          width: 76mm; 
-          background: white; 
-          font-weight: 750;
-        }
-        
-        .invoice-container { 
-          width: 100%; 
-          max-width: 76mm; 
-          margin: 0 auto; 
-          padding: 1mm;
-          box-sizing: border-box;
-        }
-        
-        .company-header { 
-          text-align: center; 
-          margin-bottom: 2mm; 
-          padding-bottom: 1mm; 
-        }
-        
-        .company-name { 
-          font-size: 16px; 
-          margin: 0 0 1mm 0; 
-          font-weight: 900; 
-          color: #000000;
-        }
-        
-        .company-details { 
-          margin: 1mm 0; 
-          font-size: 13px; 
-          color: #000000;
-          line-height: 1.6;
-          font-weight: 900;
-        }
-        
-        .gst-number {
-          font-weight: 900;
-          font-size: 13px;
-          margin-top: 1mm;
-          color: #000000;
-        }
-        
-        .invoice-details { 
-          margin-bottom: 2mm; 
-          padding-bottom: 1mm; 
-          font-size: 13px;
-        }
-        
-        .detail-row { 
-          display: flex; 
+
+        .center { text-align: center; }
+        .bold { font-weight: 900; }
+        .line { border-bottom: 1px dashed #000; margin: 5px 0; }
+
+        .item-row {
+          display: flex;
           justify-content: space-between;
-          margin: 0.5mm 0;
+          white-space: nowrap;
+          margin: 2px 0;
         }
-        
-        .detail-label {
-          font-weight: 900;
-          color: #000000;
-        }
-        
-        .items-header {
-          font-weight: 900;
-          font-size: 15px;
-          text-align: center;
-          margin: 2mm 0;
-          padding: 1mm 0;
-        }
-        
-        .items-table { 
-          width: 100%; 
-          border-collapse: collapse; 
-          margin-bottom: 2mm; 
-          font-size: 13px;
-        }
-        
-        .items-table th { 
-          text-align: left; 
-          font-weight: 900; 
-          padding: 0.5mm 0;
-        }
-        
-        .items-table td { 
-          padding: 0.5mm 0;
-          vertical-align: top;
-          font-weight: 900;
-        }
-        
-        .item-name {
-          max-width: 35mm;
-          word-break: break-word;
-          font-weight: 900;
-        }
-        
-        .align-right {
-          text-align: right;
-        }
-        
-        .summary-section { 
-          margin-top: 2mm;
-          font-size: 14px;
-        }
-        
-        .summary-row { 
-          display: flex; 
+
+        .item-name { width: 42%; }
+        .item-qty { width: 13%; text-align: right; }
+        .item-rate { width: 20%; text-align: right; }
+        .item-total { width: 25%; text-align: right; }
+
+        .summary-line {
+          display: flex;
           justify-content: space-between;
-          margin: 0.5mm 0;
-          padding: 0.5mm 0;
+          margin: 3px 0;
         }
-        
-        .summary-label {
-          color: #000000;
-          font-weight: 900;
-        }
-        
-        .summary-value {
-          font-weight: 900;
-        }
-        
-        .subtotal-row {
-          padding-top: 1mm;
-        }
-        
-        .total-row {
-          margin: 2mm 0;
-          padding: 1mm 0;
-          font-size: 15px;
-          font-weight: 900;
-        }
-        
-        .footer { 
-          text-align: center; 
-          margin-top: 2mm; 
-          font-size: 13px; 
-          padding-top: 1mm; 
-          color: #000000;
-        }
-        
-        .thank-you {
-          font-weight: 900;
-          font-size: 15px;
-          color: #000000;
-          margin-bottom: 1mm;
-        }
-        
-        .return-policy {
-          font-size: 12px;
-          margin-top: 1mm;
-          font-weight: 900;
-        }
-        
-        /* Print-specific adjustments */
-        @media print {
-          .invoice-container {
-            padding: 0.5mm;
-          }
-          
-          body {
-            padding: 0;
-            font-size: 13px;
-          }
+
+        .section {
+          margin: 5px 0;
         }
       </style>
     </head>
     <body>
-      <div class="invoice-container">
-        <div class="company-header">
-          <div class="company-name">${companyInfo.name.toUpperCase()}</div>
-          <div class="company-details">
-            ${companyInfo.address}<br>
-            📞 ${companyInfo.phone} | ✉️ ${companyInfo.email}
-          </div>
-          <div class="gst-number">GSTIN: 09ABKFR9647R1ZV</div>
-        </div>
-        
-        <div class="invoice-details">
-          <div class="detail-row">
-            <span class="detail-label">Invoice #:</span>
-            <span>${invoiceNum}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Date:</span>
-            <span>${new Date().toLocaleDateString('en-IN')}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Time:</span>
-            <span>${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Cashier:</span>
-            <span>${userName || "Admin"}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Room:</span>
-            <span>${rooms.find((r) => r._id === selectedRoom)?.roomName || "N/A"}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Table:</span>
-            <span>${rooms.find((r) => r._id === selectedRoom)?.tables.find((t) => t._id === selectedTable)?.tableNumber || "N/A"}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Payment Method:</span>
-            <span>${billData.paymentMethod.charAt(0).toUpperCase() + billData.paymentMethod.slice(1)}</span>
-          </div>
-        </div>
-        
-        <div class="items-header">ORDER DETAILS</div>
-        
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th>ITEM</th>
-              <th class="align-right">QTY</th>
-              <th class="align-right">PRICE</th>
-              <th class="align-right">TOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${billData.items
-              .map(
-                (item) => `
-              <tr>
-                <td class="item-name">${item.product.name}</td>
-                <td class="align-right">${item.quantity}</td>
-                <td class="align-right">₹${item.product.price.toFixed(2)}</td>
-                <td class="align-right">₹${item.itemTotal.toFixed(2)}</td>
-              </tr>
-            `
-              )
-              .join("")}
-          </tbody>
-        </table>
-        
-        <div class="summary-section">
-          <div class="summary-row">
-            <span class="summary-label">Subtotal:</span>
-            <span class="summary-value">₹${billData.totalAmount.toFixed(2)}</span>
-          </div>
-          <div class="summary-row">
-            <span class="summary-label">${discountLabel}</span>
-            <span class="summary-value">- ₹${calculateDiscount()}</span>
-          </div>
-          <div class="summary-row subtotal-row">
-            <span class="summary-label">After Discount:</span>
-            <span class="summary-value">₹${calculateSubtotalAfterDiscount()}</span>
-          </div>
-          <div class="summary-row">
-            <span class="summary-label">GST (${companyInfo.taxRate}%):</span>
-            <span class="summary-value">₹${calculateTax()}</span>
-          </div>
-          <div class="summary-row total-row">
-            <span>GRAND TOTAL:</span>
-            <span>₹${calculateGrandTotal()}</span>
-          </div>
-        </div>
-        
-        <div class="footer">
-          <div class="thank-you">THANK YOU FOR YOUR VISIT</div>
-          <div>We appreciate your business!</div>
-        </div>
+      <div class="center bold">${companyInfo.name}</div>
+      <div class="center">${companyInfo.address}</div>
+      <div class="center">GSTIN: 09ABKFR9647R1ZV</div>
+      <div class="center">Phone: ${companyInfo.phone}</div>
+
+      <div class="line"></div>
+
+      <div class="section">
+        <div>Bill No: ${invoiceNum}</div>
+        <div>Created On: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+        <div>Bill To: ${rooms.find(r => r._id === selectedRoom)?.roomName || "N/A"} Table ${rooms.find(r => r._id === selectedRoom)?.tables.find(t => t._id === selectedTable)?.tableNumber || "N/A"}</div>
       </div>
-      
+
+      <div class="line"></div>
+
+      <div class="item-row bold">
+        <span class="item-name">Item</span>
+        <span class="item-qty">Qty</span>
+        <span class="item-rate">Rate</span>
+        <span class="item-total">Total</span>
+      </div>
+
+      ${billData.items.map(item => `
+        <div class="item-row">
+          <span class="item-name">${item.product.name}</span>
+          <span class="item-qty">${item.quantity}</span>
+          <span class="item-rate">${item.product.price.toFixed(2)}</span>
+          <span class="item-total">${item.itemTotal.toFixed(2)}</span>
+        </div>
+      `).join('')}
+
+      <div class="line"></div>
+
+      <div class="section">
+        <div>Total Items: ${billData.items.length}</div>
+        <div>Total Quantity: ${totalItems}</div>
+      </div>
+
+      <div class="line"></div>
+
+      <div class="summary-line"><span>Sub Total:</span><span>₹${subtotal}</span></div>
+      <div class="summary-line"><span>Cash Discount:</span><span>- ₹${discount}</span></div>
+      <div class="summary-line"><span>After Discount:</span><span>₹${afterDiscount}</span></div>
+      <div class="summary-line"><span>GST:</span><span>₹${gst}</span></div>
+      <div class="summary-line bold"><span>Total:</span><span>₹${grandTotal}</span></div>
+      <div class="summary-line"><span>Balance:</span><span>₹${grandTotal}</span></div>
+
+      <div class="line"></div>
+
+      <div class="center bold">Total Savings ₹${totalSavings}</div>
+      <div class="center bold">Thank You! Visit Again!</div>
+
       <script>
         window.onload = function() {
           setTimeout(() => {
@@ -554,6 +378,7 @@ const handlePrintBill = () => {
   `);
   printWindow.document.close();
 };
+
   // Calculate bill totals
  const calculateDiscount = () => {
   const discount = billData.discount || { type: "percentage", value: parseFloat(companyInfo.discount) || 0 };
