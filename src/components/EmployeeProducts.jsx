@@ -174,137 +174,73 @@ const handleAddToBill = async (kot = null, generateFinalBill = false, paymentMet
 }
 };
   // Handle printing KOT
-  const handlePrintKOT = (kot) => {
-    const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
-    if (!printWindow) {
-      alert("Pop-up blocked! Please allow pop-ups to print KOT.");
-      return;
-    }
+const handlePrintKOT = (kot) => {
+  const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
+  if (!printWindow) {
+    alert("Pop-up blocked! Please allow pop-ups to print KOT.");
+    return;
+  }
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>KOT - ${kot.kotNumber}</title>
-        <meta charset="UTF-8">
-        <style>
-          @page { size: 80mm 297mm; margin: 2mm; }
-          body { 
-            font-family: Arial, sans-serif; 
-            margin: 0; 
-            padding: 5mm; 
-            color: #000; 
-            font-size: 14px; 
-            line-height: 1.4; 
-            width: 70mm; 
-            background: white; 
-          }
-          .kot-container { 
-            max-width: 70mm; 
-            margin: 0 auto; 
-          }
-          .header { 
-            text-align: center; 
-            margin-bottom: 5mm; 
-            border-bottom: 2px solid #333; 
-            padding-bottom: 3mm; 
-          }
-          .header h1 { 
-            font-size: 20px; 
-            margin: 0 0 2mm 0; 
-            font-weight: bold; 
-            text-transform: uppercase;
-          }
-          .kot-details { 
-            margin-bottom: 5mm; 
-            border-bottom: 1px solid #333; 
-            padding-bottom: 3mm; 
-          }
-          .kot-details p { 
-            margin: 2mm 0; 
-            font-size: 14px; 
-            display: flex; 
-            justify-content: space-between; 
-          }
-          table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            font-size: 13px; 
-            margin-bottom: 5mm; 
-          }
-          th { 
-            text-align: left; 
-            font-weight: bold; 
-            border-bottom: 2px solid #333; 
-            padding: 2mm 0;
-          }
-          td { 
-            padding: 1.5mm 0; 
-            vertical-align: top;
-          }
-          .footer { 
-            text-align: center; 
-            margin-top: 5mm; 
-            font-size: 12px; 
-            padding-top: 3mm; 
-            border-top: 1px solid #333; 
-            font-weight: bold;
-          }
-          .item-name {
-            font-weight: bold;
-          }
-          .instructions {
-            color: #555;
-            font-style: italic;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="kot-container">
-          <div class="header">
-            <h1>Kitchen Order Ticket</h1>
-          </div>
-          <div class="kot-details">
-            <p><strong>KOT No:</strong> <span>${kot.kotNumber}</span></p>
-            <p><strong>Room:</strong> <span>${rooms.find((r) => r._id === kot.roomId)?.roomName || "N/A"}</span></p>
-            <p><strong>Table:</strong> <span>${rooms.find((r) => r._id === kot.roomId)?.tables.find((t) => t._id === kot.tableId)?.tableNumber || "N/A"}</span></p>
-            <p><strong>Time:</strong> <span>${new Date(kot.createdAt).toLocaleTimeString()}</span></p>
-            <p><strong>Staff:</strong> <span>${userName || "N/A"}</span></p>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th style="width: 15%;">Qty</th>
-                <th style="width: 35%;">Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${kot.orderItems
-                .map(
-                  (item) => `
-                <tr>
-                  <td class="item-name">${item.product.name}</td>
-                  <td>${item.quantity}</td>
-                  <td class="instructions">${item.specialInstructions || "-"}</td>
-                </tr>
-              `
-                )
-                .join("")}
-            </tbody>
-          </table>
-          <div class="footer">
-            <p>Thank you!</p>
-          </div>
-        </div>
-        <script>
-          setTimeout(() => window.print(), 100);
-        </script>
-      </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>KOT - ${kot.kotNumber}</title>
+      <meta charset="UTF-8">
+      <style>
+        @page { size: 80mm auto; margin: 2mm; }
+        body {
+          font-family: 'Courier New', monospace;
+          margin: 0;
+          padding: 2mm 5mm;
+          color: #000;
+          font-size: 14px;
+          width: 70mm;
+        }
+      .kot-details {
+  font-size: 12px;
+  margin: 0;
+  padding: 0;
+  line-height: 1.1;
+}
+.kot-details p {
+  margin: 0;
+  padding: 0;
+  line-height: 1.1;
+}
+.items {
+  font-size: 18px;
+  font-weight: bold;
+  line-height: 1.3;
+ margin: 4px 0 0 0; 
+  padding: 0;
+}
+
+      </style>
+    </head>
+    <body>
+      <div class="kot-details">
+        <p>KOT No: ${kot.kotNumber}</p>
+        <p>Date: ${new Date(kot.createdAt).toLocaleDateString()}</p>
+        <p>Time: ${new Date(kot.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+        <p>Bill No: ${kot.billNumber || 'N/A'}</p>
+       <p>Table: ${rooms.find((r) => r._id === kot.roomId)?.roomName || "N/A"} Table ${rooms.find((r) => r._id === kot.roomId)?.tables.find((t) => t._id === kot.tableId)?.tableNumber || "N/A"}</p>
+
+      </div>
+
+      <div class="items">
+      ${kot.orderItems.map(item => `<div>${item.product.name.toUpperCase()}&nbsp;(${item.quantity})</div>`).join('')}
+      </div>
+
+      <script>
+        setTimeout(() => window.print(), 100);
+      </script>
+    </body>
+    </html>
+  `);
+  printWindow.document.close();
+};
+
   // Handle bill printing
 const handlePrintBill = () => {
   const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
