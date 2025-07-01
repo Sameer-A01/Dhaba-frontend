@@ -887,7 +887,7 @@ const Inventory = () => {
                     ))}
                   </select>
                 </div>
-                <div className="mb-4">
+                {/* <div className="mb-4">
                   <label className="block text-gray-700 font-medium mb-2">User (Optional)</label>
                   <select
                     name="user"
@@ -904,7 +904,7 @@ const Inventory = () => {
                       <option disabled>No users available</option>
                     )}
                   </select>
-                </div>
+                </div> */}
                 <div className="mb-4 md:col-span-2">
                   <label className="block text-gray-700 font-medium mb-2">Notes</label>
                   <textarea
