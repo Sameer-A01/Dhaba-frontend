@@ -25,12 +25,12 @@ const POSPage = () => {
   const [refreshingRooms, setRefreshingRooms] = useState(false);
   const [showBill, setShowBill] = useState(false);
   const [billData, setBillData] = useState({
-  kots: [],
-  totalAmount: 0,
-  items: [],
-  paymentMethod: "cash",
-  discount: { type: "percentage", value: 0, reason: "Standard discount" },
-});
+    kots: [],
+    totalAmount: 0,
+    items: [],
+    paymentMethod: "cash",
+    discount: { type: "percentage", value: 0, reason: "Standard discount" },
+  });
   const [searchQuery, setSearchQuery] = useState("");
 
   const billRef = useRef(null);
@@ -103,307 +103,287 @@ const POSPage = () => {
   };
 
   // Handle adding KOT items to bill
-const handleAddToBill = async (kot = null, generateFinalBill = false, paymentMethod = "cash", kotDiscount = null) => {
-  try {
-    const response = await axiosInstance.get(`/kot?tableId=${selectedTable}&status=preparing,ready`);
-    const kots = response.data.kots;
+  const handleAddToBill = async (kot = null, generateFinalBill = false, paymentMethod = "cash", kotDiscount = null) => {
+    try {
+      const response = await axiosInstance.get(`/kot?tableId=${selectedTable}&status=preparing,ready`);
+    
+      const kots = response.data.kots;
 
-    const itemMap = new Map();
-    kots.forEach((kot) => {
-      kot.orderItems.forEach((item) => {
-        const product = products.find((p) => p._id === (item.product?._id || item.product));
-        if (product) {
-          const key = product._id;
-          const existing = itemMap.get(key) || { product, quantity: 0, itemTotal: 0 };
-          itemMap.set(key, {
-            product,
-            quantity: existing.quantity + item.quantity,
-            itemTotal: existing.itemTotal + (product.price * item.quantity),
-          });
-        }
+      const itemMap = new Map();
+      kots.forEach((kot) => {
+        kot.orderItems.forEach((item) => {
+          const product = products.find((p) => p._id === (item.product?._id || item.product));
+          if (product) {
+            const key = product._id;
+            const existing = itemMap.get(key) || { product, quantity: 0, itemTotal: 0 };
+            itemMap.set(key, {
+              product,
+              quantity: existing.quantity + item.quantity,
+              itemTotal: existing.itemTotal + (product.price * item.quantity),
+            });
+          }
+        });
       });
-    });
 
-    const items = Array.from(itemMap.values());
-    const totalAmount = items.reduce((sum, item) => sum + item.itemTotal, 0);
+      const items = Array.from(itemMap.values());
+      const totalAmount = items.reduce((sum, item) => sum + item.itemTotal, 0);
 
-    // Use KOT-specific discount if provided, otherwise fall back to companyInfo.discount
-    const discountToUse = kotDiscount || {
-      type: "percentage",
-      value: parseFloat(companyInfo.discount) || 0,
-      reason: "Standard discount",
-    };
-
-    if (generateFinalBill) {
-      const orderData = {
-        roomId: selectedRoom,
-        tableId: selectedTable,
-        kotIds: kots.map((kot) => kot._id),
-        products: items.map((item) => ({
-          productId: item.product._id,
-          quantity: item.quantity,
-          price: item.product.price,
-        })),
-        discount: discountToUse,
-        paymentMethod,
+      // Use KOT-specific discount if provided, otherwise fall back to companyInfo.discount
+      const discountToUse = kotDiscount || {
+        type: "percentage",
+        value: parseFloat(companyInfo.discount) || 0,
+        reason: "Standard discount",
       };
 
-      await axiosInstance.post("/order/add", orderData, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
+      if (generateFinalBill) {
+        const orderData = {
+          roomId: selectedRoom,
+          tableId: selectedTable,
+          kotIds: kots.map((kot) => kot._id),
+          products: items.map((item) => ({
+            productId: item.product._id,
+            quantity: item.quantity,
+            price: item.product.price,
+          })),
+          discount: discountToUse,
+          paymentMethod,
+        };
+
+        await axiosInstance.post("/order/add", orderData, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
+        });
+
+        await axiosInstance.put(`/kot/close/${selectedTable}`, {}, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
+        });
+
+        await fetchData();
+      }
+
+      setBillData({
+        kots,
+        items,
+        totalAmount,
+        paymentMethod,
+        discount: discountToUse,
       });
 
-      await axiosInstance.put(`/kot/close/${selectedTable}`, {}, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("ims_token")}` },
-      });
+      setShowBill(true);
+    } catch (error) {
+      console.error("Error details:", error.response?.data || error.message);
+      alert("Failed to generate bill: " + (error.response?.data?.message || error.message));
+    }
+  };
 
-      await fetchData();
+  // Handle printing KOT
+  const handlePrintKOT = (kot) => {
+    const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
+    if (!printWindow) {
+      alert("Pop-up blocked! Please allow pop-ups to print KOT.");
+      return;
     }
 
-    setBillData({
-      kots,
-      items,
-      totalAmount,
-      paymentMethod,
-      discount: discountToUse, // Store discount in billData
-    });
-
-    setShowBill(true);
-  } catch (error) {
-  console.error("Error details:", error.response?.data || error.message);
-  alert("Failed to generate bill: " + (error.response?.data?.message || error.message));
-}
-};
-  // Handle printing KOT
-const handlePrintKOT = (kot) => {
-  const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
-  if (!printWindow) {
-    alert("Pop-up blocked! Please allow pop-ups to print KOT.");
-    return;
-  }
-
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>KOT - ${kot.kotNumber}</title>
-      <meta charset="UTF-8">
-      <style>
-        @page { size: 80mm auto; margin: 2mm; }
-        body {
-          font-family: 'Courier New', monospace;
-          margin: 0;
-          padding: 2mm 5mm;
-          color: #000;
-          font-size: 14px;
-          width: 70mm;
-        }
-      .kot-details {
-  font-size: 12px;
-  margin: 0;
-  padding: 0;
-  line-height: 1.1;
-}
-.kot-details p {
-  margin: 0;
-  padding: 0;
-  line-height: 1.1;
-}
-.items {
-  font-size: 18px;
-  font-weight: bold;
-  line-height: 1.3;
- margin: 4px 0 0 0; 
-  padding: 0;
-}
-
-      </style>
-    </head>
-    <body>
-      <div class="kot-details">
-        <p>KOT No: ${kot.kotNumber}</p>
-        <p>Date: ${new Date(kot.createdAt).toLocaleDateString()}</p>
-        <p>Time: ${new Date(kot.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
-        <p>Bill No: ${kot.billNumber || 'N/A'}</p>
-       <p>Table: ${rooms.find((r) => r._id === kot.roomId)?.roomName || "N/A"} Table ${rooms.find((r) => r._id === kot.roomId)?.tables.find((t) => t._id === kot.tableId)?.tableNumber || "N/A"}</p>
-
-      </div>
-
-      <div class="items">
-      ${kot.orderItems.map(item => `<div>${item.product.name.toUpperCase()}&nbsp;(${item.quantity})</div>`).join('')}
-      </div>
-
-      <script>
-        setTimeout(() => window.print(), 100);
-      </script>
-    </body>
-    </html>
-  `);
-  printWindow.document.close();
-};
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>KOT - ${kot.kotNumber}</title>
+        <meta charset="UTF-8">
+        <style>
+          @page { size: 80mm auto; margin: 2mm; }
+          body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 2mm 5mm;
+            color: #000;
+            font-size: 14px;
+            width: 70mm;
+          }
+          .kot-details {
+            font-size: 12px;
+            margin: 0;
+            padding: 0;
+            line-height: 1.1;
+          }
+          .kot-details p {
+            margin: 0;
+            padding: 0;
+            line-height: 1.1;
+          }
+          .items {
+            font-size: 18px;
+            font-weight: bold;
+            line-height: 1.3;
+            margin: 4px 0 0 0;
+            padding: 0;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="kot-details">
+          <p>KOT No: ${kot.kotNumber}</p>
+          <p>Date: ${new Date(kot.createdAt).toLocaleDateString()}</p>
+          <p>Time: ${new Date(kot.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+          <p>Bill No: ${kot.billNumber || 'N/A'}</p>
+          <p>Table: ${rooms.find((r) => r._id === kot.roomId)?.roomName || "N/A"} Table ${rooms.find((r) => r._id === kot.roomId)?.tables.find((t) => t._id === kot.tableId)?.tableNumber || "N/A"}</p>
+        </div>
+        <div class="items">
+          ${kot.orderItems.map(item => `<div>${item.product.name.toUpperCase()} (${item.quantity})</div>`).join('')}
+        </div>
+        <script>
+          setTimeout(() => window.print(), 100);
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   // Handle bill printing
-const handlePrintBill = () => {
-  const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
-  if (!printWindow) {
-    alert("Pop-up blocked! Please allow pop-ups to print invoice.");
-    return;
-  }
+  const handlePrintBill = () => {
+    const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
+    if (!printWindow) {
+      alert("Pop-up blocked! Please allow pop-ups to print invoice.");
+      return;
+    }
 
-  const totalItems = billData.items.reduce((sum, item) => sum + item.quantity, 0);
-  const discount = calculateDiscount();
-  const subtotal = billData.totalAmount.toFixed(2);
-  const afterDiscount = calculateSubtotalAfterDiscount();
-  const gst = calculateTax();
-  const grandTotal = calculateGrandTotal();
-  const totalSavings = discount;
+    const totalItems = billData.items.reduce((sum, item) => sum + item.quantity, 0);
+    const discount = calculateDiscount();
+    const subtotal = billData.totalAmount.toFixed(2);
+    const afterDiscount = calculateSubtotalAfterDiscount();
+    const gst = calculateTax();
+    const grandTotal = calculateGrandTotal();
+    const totalSavings = discount;
 
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <title>Bill - ${companyInfo.name}</title>
-      <style>
-        @page { size: 80mm auto; margin: 1.5mm; }
-
-        body {
-          font-family: 'Courier New', monospace;
-          font-size: 13.5px;
-          font-weight: 900;
-          width: 76mm;
-          padding: 2mm;
-          margin: 0;
-          color: #000000;
-        }
-
-        @media print {
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Bill - ${companyInfo.name}</title>
+        <style>
+          @page { size: 80mm auto; margin: 1.5mm; }
           body {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            -webkit-font-smoothing: none;
-            font-smooth: never;
+            font-family: 'Courier New', monospace;
+            font-size: 13.5px;
+            font-weight: 900;
+            width: 76mm;
+            padding: 2mm;
+            margin: 0;
+            color: #000000;
           }
-        }
-
-        .center { text-align: center; }
-        .bold { font-weight: 900; }
-        .line { border-bottom: 1px dashed #000; margin: 5px 0; }
-
-        .item-row {
-          display: flex;
-          justify-content: space-between;
-          white-space: nowrap;
-          margin: 2px 0;
-        }
-
-        .item-name { width: 42%; }
-        .item-qty { width: 13%; text-align: right; }
-        .item-rate { width: 20%; text-align: right; }
-        .item-total { width: 25%; text-align: right; }
-
-        .summary-line {
-          display: flex;
-          justify-content: space-between;
-          margin: 3px 0;
-        }
-
-        .section {
-          margin: 5px 0;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="center bold">${companyInfo.name}</div>
-      <div class="center">${companyInfo.address}</div>
-      <div class="center">GSTIN: 09ABKFR9647R1ZV</div>
-      <div class="center">Phone: ${companyInfo.phone}</div>
-
-      <div class="line"></div>
-
-      <div class="section">
-        <div>Bill No: ${invoiceNum}</div>
-        <div>Created On: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-        <div>Bill To: ${rooms.find(r => r._id === selectedRoom)?.roomName || "N/A"} Table ${rooms.find(r => r._id === selectedRoom)?.tables.find(t => t._id === selectedTable)?.tableNumber || "N/A"}</div>
-      </div>
-
-      <div class="line"></div>
-
-      <div class="item-row bold">
-        <span class="item-name">Item</span>
-        <span class="item-qty">Qty</span>
-        <span class="item-rate">Rate</span>
-        <span class="item-total">Total</span>
-      </div>
-
-      ${billData.items.map(item => `
-        <div class="item-row">
-          <span class="item-name">${item.product.name}</span>
-          <span class="item-qty">${item.quantity}</span>
-          <span class="item-rate">${item.product.price.toFixed(2)}</span>
-          <span class="item-total">${item.itemTotal.toFixed(2)}</span>
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              -webkit-font-smoothing: none;
+              font-smooth: never;
+            }
+          }
+          .center { text-align: center; }
+          .bold { font-weight: 900; }
+          .line { border-bottom: 1px dashed #000; margin: 5px 0; }
+          .item-row {
+            display: flex;
+            justify-content: space-between;
+            white-space: nowrap;
+            margin: 2px 0;
+          }
+          .item-name { width: 42%; }
+          .item-qty { width: 13%; text-align: right; }
+          .item-rate { width: 20%; text-align: right; }
+          .item-total { width: 25%; text-align: right; }
+          .summary-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+          }
+          .section {
+            margin: 5px 0;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="center bold">${companyInfo.name}</div>
+        <div class="center">${companyInfo.address}</div>
+        <div class="center">GSTIN: 09ABKFR9647R1ZV</div>
+        <div class="center">Phone: ${companyInfo.phone}</div>
+        <div class="line"></div>
+        <div class="section">
+          <div>Bill No: ${invoiceNum}</div>
+          <div>Created On: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+          <div>Bill To: ${rooms.find(r => r._id === selectedRoom)?.roomName || "N/A"} Table ${rooms.find(r => r._id === selectedRoom)?.tables.find(t => t._id === selectedTable)?.tableNumber || "N/A"}</div>
+          <div>Payment Method: ${billData.paymentMethod.charAt(0).toUpperCase() + billData.paymentMethod.slice(1)}</div>
         </div>
-      `).join('')}
-
-      <div class="line"></div>
-
-      <div class="section">
-        <div>Total Items: ${billData.items.length}</div>
-        <div>Total Quantity: ${totalItems}</div>
-      </div>
-
-      <div class="line"></div>
-
-      <div class="summary-line"><span>Sub Total:</span><span>₹${subtotal}</span></div>
-      <div class="summary-line"><span>Cash Discount:</span><span>- ₹${discount}</span></div>
-      <div class="summary-line"><span>After Discount:</span><span>₹${afterDiscount}</span></div>
-      <div class="summary-line"><span>GST:</span><span>₹${gst}</span></div>
-      <div class="summary-line bold"><span>Total:</span><span>₹${grandTotal}</span></div>
-      <div class="summary-line"><span>Balance:</span><span>₹${grandTotal}</span></div>
-
-      <div class="line"></div>
-
-      <div class="center bold">Total Savings ₹${totalSavings}</div>
-      <div class="center bold">Thank You! Visit Again!</div>
-
-      <script>
-        window.onload = function() {
-          setTimeout(() => {
-            window.print();
-            setTimeout(() => window.close(), 1000);
-          }, 500);
-        };
-      </script>
-    </body>
-    </html>
-  `);
-  printWindow.document.close();
-};
+        <div class="line"></div>
+        <div class="item-row bold">
+          <span class="item-name">Item</span>
+          <span class="item-qty">Qty</span>
+          <span class="item-rate">Rate</span>
+          <span class="item-total">Total</span>
+        </div>
+        ${billData.items.map(item => `
+          <div class="item-row">
+            <span class="item-name">${item.product.name}</span>
+            <span class="item-qty">${item.quantity}</span>
+            <span class="item-rate">${item.product.price.toFixed(2)}</span>
+            <span class="item-total">${item.itemTotal.toFixed(2)}</span>
+          </div>
+        `).join('')}
+        <div class="line"></div>
+        <div class="section">
+          <div>Total Items: ${billData.items.length}</div>
+          <div>Total Quantity: ${totalItems}</div>
+        </div>
+        <div class="line"></div>
+        <div class="summary-line"><span>Sub Total:</span><span>₹${subtotal}</span></div>
+        ${discount !== "0.00" ? `<div class="summary-line"><span>Cash Discount:</span><span>- ₹${discount}</span></div>` : ""}
+        ${discount !== "0.00" ? `<div class="summary-line"><span>After Discount:</span><span>₹${afterDiscount}</span></div>` : ""}
+        <div class="summary-line"><span>GST:</span><span>₹${gst}</span></div>
+        <div class="summary-line bold"><span>Total:</span><span>₹${grandTotal}</span></div>
+        <div class="summary-line"><span>Balance:</span><span>₹${grandTotal}</span></div>
+        <div class="line"></div>
+        ${discount !== "0.00" ? `<div class="center bold">Total Savings ₹${totalSavings}</div>` : ""}
+        <div class="center bold">Thank You! Visit Again!</div>
+        <script>
+          window.onload = function() {
+            setTimeout(() => {
+              window.print();
+              setTimeout(() => window.close(), 1000);
+            }, 500);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   // Calculate bill totals
- const calculateDiscount = () => {
-  const discount = billData.discount || { type: "percentage", value: parseFloat(companyInfo.discount) || 0 };
-  if (discount.type === "percentage") {
-    return (billData.totalAmount * (discount.value / 100)).toFixed(2);
-  } else {
-    return Math.min(discount.value, billData.totalAmount).toFixed(2); // Ensure fixed discount doesn't exceed total
-  }
-};
+  const calculateDiscount = () => {
+    const discount = billData.discount || { type: "percentage", value: parseFloat(companyInfo.discount) || 0 };
+    if (discount.type === "percentage") {
+      return (billData.totalAmount * (discount.value / 100)).toFixed(2);
+    } else {
+      return Math.min(discount.value, billData.totalAmount).toFixed(2);
+    }
+  };
 
-const calculateSubtotalAfterDiscount = () => {
-  return (parseFloat(billData.totalAmount) - parseFloat(calculateDiscount())).toFixed(2);
-};
+  const calculateSubtotalAfterDiscount = () => {
+    return (parseFloat(billData.totalAmount) - parseFloat(calculateDiscount())).toFixed(2);
+  };
 
-const calculateTax = () => {
-  const taxRatePercent = parseFloat(companyInfo.taxRate) || 0;
-  const subtotalAfterDiscount = parseFloat(calculateSubtotalAfterDiscount());
-  return (subtotalAfterDiscount * (taxRatePercent / 100)).toFixed(2);
-};
+  const calculateTax = () => {
+    const taxRatePercent = parseFloat(companyInfo.taxRate) || 0;
+    const subtotalAfterDiscount = parseFloat(calculateSubtotalAfterDiscount());
+    return (subtotalAfterDiscount * (taxRatePercent / 100)).toFixed(2);
+  };
 
-const calculateGrandTotal = () => {
-  const subtotalAfterDiscount = parseFloat(calculateSubtotalAfterDiscount());
-  const tax = parseFloat(calculateTax());
-  return (subtotalAfterDiscount + tax).toFixed(2);
-};
+  const calculateGrandTotal = () => {
+    const subtotalAfterDiscount = parseFloat(calculateSubtotalAfterDiscount());
+    const tax = parseFloat(calculateTax());
+    return (subtotalAfterDiscount + tax).toFixed(2);
+  };
 
   // Handle company info change
   const handleCompanyInfoChange = (e) => {
@@ -713,7 +693,18 @@ const calculateGrandTotal = () => {
                       <p className="text-gray-600">Time: {new Date().toLocaleTimeString()}</p>
                       <p className="text-gray-600">Room: {rooms.find((r) => r._id === selectedRoom)?.roomName || "N/A"}</p>
                       <p className="text-gray-600">Table: {rooms.find((r) => r._id === selectedRoom)?.tables.find((t) => t._id === selectedTable)?.tableNumber || "N/A"}</p>
-                      <p className="text-gray-600">Payment Method: {billData.paymentMethod.charAt(0).toUpperCase() + billData.paymentMethod.slice(1)}</p>
+                      <p className="text-gray-600">
+                        Payment Method:
+                        <select
+                          value={billData.paymentMethod}
+                          onChange={(e) => setBillData({ ...billData, paymentMethod: e.target.value })}
+                          className="ml-2 border border-gray-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="cash">Cash</option>
+                          <option value="card">Card</option>
+                          <option value="upi">UPI</option>
+                        </select>
+                      </p>
                     </div>
                     <div>
                       <p className="text-gray-600">Cashier: {userName}</p>
@@ -747,16 +738,20 @@ const calculateGrandTotal = () => {
                         <span className="text-gray-600">Subtotal:</span>
                         <span className="font-medium">₹{billData.totalAmount.toFixed(2)}</span>
                       </div>
-                   <div className="flex justify-between py-2">
-  <span className="text-gray-600">
-    Discount ({billData.discount?.type === "percentage" ? `${billData.discount?.value || 0}%` : `₹${billData.discount?.value || 0}`}):
-  </span>
-  <span className="font-medium text-green-600">₹{calculateDiscount()}</span>
-</div>
-                      <div className="flex justify-between py-2">
-                        <span className="text-gray-600">Subtotal after Discount:</span>
-                        <span className="font-medium">₹{calculateSubtotalAfterDiscount()}</span>
-                      </div>
+                      {calculateDiscount() !== "0.00" && (
+                        <>
+                          <div className="flex justify-between py-2">
+                            <span className="text-gray-600">
+                              Discount ({billData.discount?.type === "percentage" ? `${billData.discount?.value || 0}%` : `₹${billData.discount?.value || 0}`}):
+                            </span>
+                            <span className="font-medium text-green-600">₹{calculateDiscount()}</span>
+                          </div>
+                          <div className="flex justify-between py-2">
+                            <span className="text-gray-600">Subtotal after Discount:</span>
+                            <span className="font-medium">₹{calculateSubtotalAfterDiscount()}</span>
+                          </div>
+                        </>
+                      )}
                       <div className="flex justify-between py-2">
                         <span className="text-gray-600">GST ({companyInfo.taxRate}%):</span>
                         <span className="font-medium">₹{calculateTax()}</span>

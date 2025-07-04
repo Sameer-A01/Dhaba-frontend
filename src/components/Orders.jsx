@@ -13,7 +13,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'react-toastify';
 
-// Helper functions remain unchanged
+// Helper functions
 const calculateTodaySales = (orders) => {
   const today = new Date().toISOString().split('T')[0];
   return orders.reduce((total, order) => {
@@ -153,7 +153,7 @@ const Orders = () => {
     fetchProducts();
     const interval = setInterval(() => {
       fetchOrders();
-    }, 30000);
+    }, 60000);
     return () => clearInterval(interval);
   }, [user.userId]);
 
@@ -226,9 +226,7 @@ const Orders = () => {
   });
 
   const totalOrderValue = orders.reduce((total, order) => {
-    return total + (order.products?.reduce((orderTotal, item) => {
-      return orderTotal + ((item.price || 0) * (item.quantity || 0));
-    }, 0) || 0);
+    return total + (order.totalAmount || 0);
   }, 0);
 
   const toggleOrderExpansion = (orderId) => {
@@ -250,333 +248,321 @@ const Orders = () => {
     return discountAmount.toFixed(2);
   };
 
-  const calculateSubtotalAfterDiscount = (subtotal, order) => {
-    return (subtotal - parseFloat(calculateDiscount(subtotal, order))).toFixed(2);
-  };
+  const printOrder = (order) => {
+    const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
+    if (!printWindow) {
+      alert("Pop-up blocked! Please allow pop-ups to print invoice.");
+      return;
+    }
 
-  const calculateTax = (subtotalAfterDiscount) => {
-    const taxRatePercent = companyInfo.taxRate || 0;
-    return (subtotalAfterDiscount * (taxRatePercent / 100)).toFixed(2);
-  };
+    const discountLabel = order.discount?.type === "percentage"
+      ? `Discount (${order.discount?.value || 0}%):`
+      : `Discount (₹${order.discount?.value || 0}):`;
 
-  const calculateGrandTotal = (subtotal, order) => {
-    const subtotalAfterDiscount = parseFloat(calculateSubtotalAfterDiscount(subtotal, order));
-    const tax = parseFloat(calculateTax(subtotalAfterDiscount));
-    return (subtotalAfterDiscount + tax).toFixed(2);
-  };
+    const subtotal = order.subTotal || 0;
+    const discountAmount = parseFloat(calculateDiscount(subtotal, order));
+    const subtotalAfterDiscount = (subtotal - discountAmount).toFixed(2);
+    const taxAmount = (subtotalAfterDiscount * (companyInfo.taxRate / 100)).toFixed(2);
 
-const printOrder = (order) => {
-  const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
-  if (!printWindow) {
-    alert("Pop-up blocked! Please allow pop-ups to print invoice.");
-    return;
-  }
-
-  const totalItems = order.products.reduce((sum, item) => sum + (item.quantity || 0), 0);
-  const discountLabel = order.discount?.type === "percentage"
-    ? `Discount (${order.discount?.value || 0}%):`
-    : `Discount (₹${order.discount?.value || 0}):`;
-
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Invoice - ${companyInfo.name}</title>
-      <meta charset="UTF-8">
-      <style>
-        @page { 
-          size: 80mm auto; 
-          margin: 1mm; 
-        }
-        
-        @media print {
-          body { 
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            -webkit-font-smoothing: none;
-            font-smooth: never;
-          }
-        }
-        
-        body { 
-          font-family: monospace, sans-serif;
-          margin: 0 auto; 
-          padding: 1mm; 
-          color: #000000; 
-          font-size: 14.5px; 
-          line-height: 1.6; 
-          width: 76mm; 
-          background: white; 
-          font-weight: 750;
-        }
-        
-        .invoice-container { 
-          width: 100%; 
-          max-width: 76mm; 
-          margin: 0 auto; 
-          padding: 1mm;
-          box-sizing: border-box;
-        }
-        
-        .company-header { 
-          text-align: center; 
-          margin-bottom: 2mm; 
-          padding-bottom: 1mm; 
-        }
-        
-        .company-name { 
-          font-size: 16px; 
-          margin: 0 0 1mm 0; 
-          font-weight: 900; 
-          color: #000000;
-        }
-        
-        .company-details { 
-          margin: 1mm 0; 
-          font-size: 13px; 
-          color: #000000;
-          line-height: 1.6;
-          font-weight: 900;
-        }
-        
-        .gst-number {
-          font-weight: 900;
-          font-size: 13px;
-          margin-top: 1mm;
-          color: #000000;
-        }
-        
-        .invoice-details { 
-          margin-bottom: 2mm; 
-          padding-bottom: 1mm; 
-          font-size: 13px;
-        }
-        
-        .detail-row { 
-          display: flex; 
-          justify-content: space-between;
-          margin: 0.5mm 0;
-        }
-        
-        .detail-label {
-          font-weight: 900;
-          color: #000000;
-        }
-        
-        .items-header {
-          font-weight: 900;
-          font-size: 15px;
-          text-align: center;
-          margin: 2mm 0;
-          padding: 1mm 0;
-        }
-        
-        .items-table { 
-          width: 100%; 
-          border-collapse: collapse; 
-          margin-bottom: 2mm; 
-          font-size: 13px;
-        }
-        
-        .items-table th { 
-          text-align: left; 
-          font-weight: 900; 
-          padding: 0.5mm 0;
-        }
-        
-        .items-table td { 
-          padding: 0.5mm 0;
-          vertical-align: top;
-          font-weight: 900;
-        }
-        
-        .item-name {
-          max-width: 35mm;
-          word-break: break-word;
-          font-weight: 900;
-        }
-        
-        .align-right {
-          text-align: right;
-        }
-        
-        .summary-section { 
-          margin-top: 2mm;
-          font-size: 14px;
-        }
-        
-        .summary-row { 
-          display: flex; 
-          justify-content: space-between;
-          margin: 0.5mm 0;
-          padding: 0.5mm 0;
-        }
-        
-        .summary-label {
-          color: #000000;
-          font-weight: 900;
-        }
-        
-        .summary-value {
-          font-weight: 900;
-        }
-        
-        .subtotal-row {
-          padding-top: 1mm;
-        }
-        
-        .total-row {
-          margin: 2mm 0;
-          padding: 1mm 0;
-          font-size: 15px;
-          font-weight: 900;
-        }
-        
-        .footer { 
-          text-align: center; 
-          margin-top: 2mm; 
-          font-size: 13px; 
-          padding-top: 1mm; 
-          color: #000000;
-        }
-        
-        .thank-you {
-          font-weight: 900;
-          font-size: 15px;
-          color: #000000;
-          margin-bottom: 1mm;
-        }
-        
-        .return-policy {
-          font-size: 12px;
-          margin-top: 1mm;
-          font-weight: 900;
-        }
-        
-        /* Print-specific adjustments */
-        @media print {
-          .invoice-container {
-            padding: 0.5mm;
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice - ${companyInfo.name}</title>
+        <meta charset="UTF-8">
+        <style>
+          @page { 
+            size: 80mm auto; 
+            margin: 1mm; 
           }
           
-          body {
-            padding: 0;
+          @media print {
+            body { 
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              -webkit-font-smoothing: none;
+              font-smooth: never;
+            }
+          }
+          
+          body { 
+            font-family: monospace, sans-serif;
+            margin: 0 auto; 
+            padding: 1mm; 
+            color: #000000; 
+            font-size: 14.5px; 
+            line-height: 1.6; 
+            width: 76mm; 
+            background: white; 
+            font-weight: 750;
+          }
+          
+          .invoice-container { 
+            width: 100%; 
+            max-width: 76mm; 
+            margin: 0 auto; 
+            padding: 1mm;
+            box-sizing: border-box;
+          }
+          
+          .company-header { 
+            text-align: center; 
+            margin-bottom: 2mm; 
+            padding-bottom: 1mm; 
+          }
+          
+          .company-name { 
+            font-size: 16px; 
+            margin: 0 0 1mm 0; 
+            font-weight: 900; 
+            color: #000000;
+          }
+          
+          .company-details { 
+            margin: 1mm 0; 
+            font-size: 13px; 
+            color: #000000;
+            line-height: 1.6;
+            font-weight: 900;
+          }
+          
+          .gst-number {
+            font-weight: 900;
+            font-size: 13px;
+            margin-top: 1mm;
+            color: #000000;
+          }
+          
+          .invoice-details { 
+            margin-bottom: 2mm; 
+            padding-bottom: 1mm; 
             font-size: 13px;
           }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="invoice-container">
-        <div class="company-header">
-          <div class="company-name">${companyInfo.name.toUpperCase()}</div>
-          <div class="company-details">
-            ${companyInfo.address}<br>
-            📞 ${companyInfo.phone} | ✉️ ${companyInfo.email}
+          
+          .detail-row { 
+            display: flex; 
+            justify-content: space-between;
+            margin: 0.5mm 0;
+          }
+          
+          .detail-label {
+            font-weight: 900;
+            color: #000000;
+          }
+          
+          .items-header {
+            font-weight: 900;
+            font-size: 15px;
+            text-align: center;
+            margin: 2mm 0;
+            padding: 1mm 0;
+          }
+          
+          .items-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 2mm; 
+            font-size: 13px;
+          }
+          
+          .items-table th { 
+            text-align: left; 
+            font-weight: 900; 
+            padding: 0.5mm 0;
+          }
+          
+          .items-table td { 
+            padding: 0.5mm 0;
+            vertical-align: top;
+            font-weight: 900;
+          }
+          
+          .item-name {
+            max-width: 35mm;
+            word-break: break-word;
+            font-weight: 900;
+          }
+          
+          .align-right {
+            text-align: right;
+          }
+          
+          .summary-section { 
+            margin-top: 2mm;
+            font-size: 14px;
+          }
+          
+          .summary-row { 
+            display: flex; 
+            justify-content: space-between;
+            margin: 0.5mm 0;
+            padding: 0.5mm 0;
+          }
+          
+          .summary-label {
+            color: #000000;
+            font-weight: 900;
+          }
+          
+          .summary-value {
+            font-weight: 900;
+          }
+          
+          .subtotal-row {
+            padding-top: 1mm;
+          }
+          
+          .total-row {
+            margin: 2mm 0;
+            padding: 1mm 0;
+            font-size: 15px;
+            font-weight: 900;
+          }
+          
+          .footer { 
+            text-align: center; 
+            margin-top: 2mm; 
+            font-size: 13px; 
+            padding-top: 1mm; 
+            color: #000000;
+          }
+          
+          .thank-you {
+            font-weight: 900;
+            font-size: 15px;
+            color: #000000;
+            margin-bottom: 1mm;
+          }
+          
+          .return-policy {
+            font-size: 12px;
+            margin-top: 1mm;
+            font-weight: 900;
+          }
+          
+          @media print {
+            .invoice-container {
+              padding: 0.5mm;
+            }
+            
+            body {
+              padding: 0;
+              font-size: 13px;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-container">
+          <div class="company-header">
+            <div class="company-name">${companyInfo.name.toUpperCase()}</div>
+            <div class="company-details">
+              ${companyInfo.address}<br>
+              📞 ${companyInfo.phone} | ✉️ ${companyInfo.email}
+            </div>
+            <div class="gst-number">GSTIN: 09ABKFR9647R1ZV</div>
           </div>
-          <div class="gst-number">GSTIN: 09ABKFR9647R1ZV</div>
-        </div>
-        
-        <div class="invoice-details">
-          <div class="detail-row">
-            <span class="detail-label">Invoice #:</span>
-            <span>${invoiceNum}</span>
+          
+          <div class="invoice-details">
+            <div class="detail-row">
+              <span class="detail-label">Invoice #:</span>
+              <span>${invoiceNum}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Date:</span>
+              <span>${new Date(order.orderDate).toLocaleDateString('en-IN')}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Time:</span>
+              <span>${new Date(order.orderDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Cashier:</span>
+              <span>${order.user?.name || "Admin"}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Room:</span>
+              <span>${order.room?.roomName || "N/A"}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Table:</span>
+              <span>${order.table?.tableNumber || "N/A"}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Payment Method:</span>
+              <span>${order.paymentMethod ? order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1) : "N/A"}</span>
+            </div>
           </div>
-          <div class="detail-row">
-            <span class="detail-label">Date:</span>
-            <span>${new Date(order.orderDate).toLocaleDateString('en-IN')}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Time:</span>
-            <span>${new Date(order.orderDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Cashier:</span>
-            <span>${order.user?.name || "Admin"}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Room:</span>
-            <span>${order.room?.roomName || "N/A"}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Table:</span>
-            <span>${order.table?.tableNumber || "N/A"}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Payment Method:</span>
-            <span>${order.paymentMethod ? order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1) : "Cash"}</span>
-          </div>
-        </div>
-        
-        <div class="items-header">ORDER DETAILS</div>
-        
-        <table class="items-table">
-          <thead>
-            <tr>
-              <th>ITEM</th>
-              <th class="align-right">QTY</th>
-              <th class="align-right">PRICE</th>
-              <th class="align-right">TOTAL</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${order.products
-              .map(
-                (item) => `
+          
+          <div class="items-header">ORDER DETAILS</div>
+          
+          <table class="items-table">
+            <thead>
               <tr>
-                <td class="item-name">${item.product?.name || "N/A"}</td>
-                <td class="align-right">${item.quantity || 0}</td>
-                <td class="align-right">₹${(item.price || 0).toFixed(2)}</td>
-                <td class="align-right">₹${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</td>
+                <th>ITEM</th>
+                <th class="align-right">QTY</th>
+                <th class="align-right">PRICE</th>
+                <th class="align-right">TOTAL</th>
               </tr>
-            `
-              )
-              .join("")}
-          </tbody>
-        </table>
-        
-        <div class="summary-section">
-          <div class="summary-row">
-            <span class="summary-label">Subtotal:</span>
-            <span class="summary-value">₹${(order.subTotal || 0).toFixed(2)}</span>
+            </thead>
+            <tbody>
+              ${order.products
+                .map(
+                  (item) => `
+                <tr>
+                  <td class="item-name">${item.product?.name || "N/A"}</td>
+                  <td class="align-right">${item.quantity || 0}</td>
+                  <td class="align-right">₹${(item.price || 0).toFixed(2)}</td>
+                  <td class="align-right">₹${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</td>
+                </tr>
+              `
+                )
+                .join("")}
+            </tbody>
+          </table>
+          
+          <div class="summary-section">
+            <div class="summary-row">
+              <span class="summary-label">Subtotal:</span>
+              <span class="summary-value">₹${(order.subTotal || 0).toFixed(2)}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">${discountLabel}</span>
+              <span class="summary-value">- ₹${discountAmount}</span>
+            </div>
+            <div class="summary-row subtotal-row">
+              <span class="summary-label">After Discount:</span>
+              <span class="summary-value">₹${subtotalAfterDiscount}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">GST (${companyInfo.taxRate}%):</span>
+              <span class="summary-value">₹${taxAmount}</span>
+            </div>
+            <div class="summary-row total-row">
+              <span>GRAND TOTAL:</span>
+              <span>₹${(order.totalAmount || 0).toFixed(2)}</span>
+            </div>
           </div>
-          <div class="summary-row">
-            <span class="summary-label">${discountLabel}</span>
-            <span class="summary-value">- ₹${calculateDiscount(order.subTotal || 0, order)}</span>
-          </div>
-          <div class="summary-row subtotal-row">
-            <span class="summary-label">After Discount:</span>
-            <span class="summary-value">₹${calculateSubtotalAfterDiscount(order.subTotal || 0, order)}</span>
-          </div>
-          <div class="summary-row">
-            <span class="summary-label">GST (${companyInfo.taxRate}%):</span>
-            <span class="summary-value">₹${calculateTax(calculateSubtotalAfterDiscount(order.subTotal || 0, order))}</span>
-          </div>
-          <div class="summary-row total-row">
-            <span>GRAND TOTAL:</span>
-            <span>₹${calculateGrandTotal(order.subTotal || 0, order)}</span>
+          
+          <div class="footer">
+            <div class="thank-you">THANK YOU FOR YOUR VISIT</div>
+            <div>We appreciate your business!</div>
           </div>
         </div>
         
-        <div class="footer">
-          <div class="thank-you">THANK YOU FOR YOUR VISIT</div>
-          <div>We appreciate your business!</div>
-        </div>
-      </div>
-      
-      <script>
-        window.onload = function() {
-          setTimeout(() => {
-            window.print();
-            setTimeout(() => window.close(), 1000);
-          }, 500);
-        };
-      </script>
-    </body>
-    </html>
-  `);
-  printWindow.document.close();
-};
+        <script>
+          window.onload = function() {
+            setTimeout(() => {
+              window.print();
+              setTimeout(() => window.close(), 1000);
+            }, 500);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
 
   const openEditModal = async (order) => {
     try {
@@ -607,14 +593,12 @@ const printOrder = (order) => {
   };
 
   const openDeleteModal = (order) => {
-    console.log('Opening delete modal for order:', order._id); // Debug log
     setDeletingOrder(order);
     setIsDeleteModalOpen(true);
   };
 
   const handleDeleteOrder = async (orderId, reason) => {
     try {
-      console.log('Deleting order:', orderId, 'Reason:', reason); // Debug log
       const response = await axiosInstance.delete(`/order/delete/${orderId}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('ims_token')}` },
         data: { reason }
@@ -692,7 +676,9 @@ const printOrder = (order) => {
       }
     }
 
-    const total = subtotal - discountAmount;
+    const subtotalAfterDiscount = subtotal - discountAmount;
+    const tax = subtotalAfterDiscount * (companyInfo.taxRate / 100);
+    const total = subtotalAfterDiscount + tax;
     return { subtotal, discountAmount, total };
   };
 
@@ -793,6 +779,11 @@ const printOrder = (order) => {
             <p className="font-medium text-green-600">
               {formatRupee(order.totalAmount || 0)}
             </p>
+          </div>
+
+          <div>
+            <p className="text-gray-500">Payment Method</p>
+            <p className="font-medium capitalize">{order.paymentMethod || 'N/A'}</p>
           </div>
           
           {user.role === 'admin' && (
@@ -1221,6 +1212,12 @@ const printOrder = (order) => {
                 </th>
                 <th 
                   scope="col" 
+                  className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                >
+                  Payment Method
+                </th>
+                <th 
+                  scope="col" 
                   className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
                 >
                   Actions
@@ -1230,7 +1227,7 @@ const printOrder = (order) => {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={user.role === 'admin' ? 8 : 5} className="px-6 py-4 text-center">
+                  <td colSpan={user.role === 'admin' ? 9 : 6} className="px-6 py-4 text-center">
                     <div className="flex justify-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
                     </div>
@@ -1267,6 +1264,9 @@ const printOrder = (order) => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
                         {formatRupee(order.totalAmount || 0)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
+                        {order.paymentMethod || 'N/A'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button 
@@ -1322,7 +1322,7 @@ const printOrder = (order) => {
                           transition={{ duration: 0.3 }}
                           className="bg-gray-50"
                         >
-                          <td colSpan={user.role === 'admin' ? 8 : 5} className="px-6 py-4">
+                          <td colSpan={user.role === 'admin' ? 9 : 6} className="px-6 py-4">
                             <div className="bg-white rounded-lg shadow-xs p-4">
                               <h4 className="font-medium text-gray-800 mb-3">Order Details</h4>
                               <div className="space-y-3">
@@ -1408,7 +1408,7 @@ const printOrder = (order) => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={user.role === 'admin' ? 8 : 5} className="px-6 py-4 text-center text-sm text-gray-500">
+                  <td colSpan={user.role === 'admin' ? 9 : 6} className="px-6 py-4 text-center text-sm text-gray-500">
                     <p>No orders found</p>
                     {searchTerm && (
                       <button 
