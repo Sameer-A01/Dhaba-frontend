@@ -73,6 +73,22 @@ const getKOTStatusBadge = (status) => {
   }
 };
 
+// Payment method styles
+const getPaymentMethodStyle = (method) => {
+  switch (method?.toLowerCase()) {
+    case 'cash':
+      return 'bg-green-100 text-green-800 border-green-300 hover:bg-green-200';
+    case 'card':
+      return 'bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200';
+    case 'upi':
+      return 'bg-purple-100 text-purple-800 border-purple-300 hover:bg-purple-200';
+    case 'online':
+      return 'bg-indigo-100 text-indigo-800 border-indigo-300 hover:bg-indigo-200';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-300 hover:bg-gray-200';
+  }
+};
+
 // Company info from localStorage
 const companyInfo = {
   name: localStorage.getItem("company_name") || "ROYAL KING DHABA",
@@ -154,7 +170,7 @@ const Orders = () => {
     const interval = setInterval(() => {
       fetchOrders();
     }, 60000);
-    return () => clearInterval(interval);
+    returnIPAddress: () => clearInterval(interval);
   }, [user.userId]);
 
   useEffect(() => {
@@ -264,6 +280,8 @@ const Orders = () => {
     const subtotalAfterDiscount = (subtotal - discountAmount).toFixed(2);
     const taxAmount = (subtotalAfterDiscount * (companyInfo.taxRate / 100)).toFixed(2);
 
+    const paymentStamp = order.paymentMethod?.toUpperCase() || "PAID";
+
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -271,188 +289,86 @@ const Orders = () => {
         <title>Invoice - ${companyInfo.name}</title>
         <meta charset="UTF-8">
         <style>
-          @page { 
-            size: 80mm auto; 
-            margin: 1mm; 
-          }
-          
-          @media print {
-            body { 
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-              -webkit-font-smoothing: none;
-              font-smooth: never;
-            }
-          }
-          
-          body { 
+          @page { size: 80mm auto; margin: 1mm; }
+          body {
             font-family: monospace, sans-serif;
-            margin: 0 auto; 
-            padding: 1mm; 
-            color: #000000; 
-            font-size: 14.5px; 
-            line-height: 1.6; 
-            width: 76mm; 
-            background: white; 
-            font-weight: 750;
-          }
-          
-          .invoice-container { 
-            width: 100%; 
-            max-width: 76mm; 
-            margin: 0 auto; 
+            margin: 0 auto;
             padding: 1mm;
-            box-sizing: border-box;
-          }
-          
-          .company-header { 
-            text-align: center; 
-            margin-bottom: 2mm; 
-            padding-bottom: 1mm; 
-          }
-          
-          .company-name { 
-            font-size: 16px; 
-            margin: 0 0 1mm 0; 
-            font-weight: 900; 
-            color: #000000;
-          }
-          
-          .company-details { 
-            margin: 1mm 0; 
-            font-size: 13px; 
-            color: #000000;
+            color: #000;
+            font-size: 14px;
             line-height: 1.6;
-            font-weight: 900;
+            width: 76mm;
+            position: relative;
           }
-          
+          .invoice-container {
+            max-width: 76mm;
+            margin: 0 auto;
+            padding: 1mm;
+          }
+          .company-header {
+            text-align: center;
+            margin-bottom: 2mm;
+          }
+          .company-name {
+            font-size: 16px;
+            font-weight: bold;
+          }
+          .company-details {
+            font-size: 13px;
+          }
           .gst-number {
-            font-weight: 900;
             font-size: 13px;
-            margin-top: 1mm;
-            color: #000000;
+            font-weight: bold;
           }
-          
-          .invoice-details { 
-            margin-bottom: 2mm; 
-            padding-bottom: 1mm; 
+          .invoice-details, .summary-section {
             font-size: 13px;
           }
-          
-          .detail-row { 
-            display: flex; 
+          .detail-row, .summary-row {
+            display: flex;
             justify-content: space-between;
-            margin: 0.5mm 0;
           }
-          
-          .detail-label {
-            font-weight: 900;
-            color: #000000;
-          }
-          
           .items-header {
-            font-weight: 900;
+            font-weight: bold;
             font-size: 15px;
             text-align: center;
             margin: 2mm 0;
-            padding: 1mm 0;
           }
-          
-          .items-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-bottom: 2mm; 
+          .items-table {
+            width: 100%;
             font-size: 13px;
           }
-          
-          .items-table th { 
-            text-align: left; 
-            font-weight: 900; 
+          .items-table th, .items-table td {
+            text-align: left;
             padding: 0.5mm 0;
           }
-          
-          .items-table td { 
-            padding: 0.5mm 0;
-            vertical-align: top;
-            font-weight: 900;
-          }
-          
-          .item-name {
-            max-width: 35mm;
-            word-break: break-word;
-            font-weight: 900;
-          }
-          
-          .align-right {
-            text-align: right;
-          }
-          
-          .summary-section { 
-            margin-top: 2mm;
-            font-size: 14px;
-          }
-          
-          .summary-row { 
-            display: flex; 
-            justify-content: space-between;
-            margin: 0.5mm 0;
-            padding: 0.5mm 0;
-          }
-          
-          .summary-label {
-            color: #000000;
-            font-weight: 900;
-          }
-          
-          .summary-value {
-            font-weight: 900;
-          }
-          
-          .subtotal-row {
-            padding-top: 1mm;
-          }
-          
+          .align-right { text-align: right; }
           .total-row {
-            margin: 2mm 0;
-            padding: 1mm 0;
+            font-weight: bold;
             font-size: 15px;
-            font-weight: 900;
+            margin-top: 2mm;
           }
-          
-          .footer { 
-            text-align: center; 
-            margin-top: 2mm; 
-            font-size: 13px; 
-            padding-top: 1mm; 
-            color: #000000;
+          .footer {
+            text-align: center;
+            margin-top: 3mm;
+            font-size: 13px;
           }
-          
-          .thank-you {
-            font-weight: 900;
-            font-size: 15px;
-            color: #000000;
-            margin-bottom: 1mm;
-          }
-          
-          .return-policy {
-            font-size: 12px;
-            margin-top: 1mm;
-            font-weight: 900;
-          }
-          
-          @media print {
-            .invoice-container {
-              padding: 0.5mm;
-            }
-            
-            body {
-              padding: 0;
-              font-size: 13px;
-            }
+          .stamp {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-15deg);
+            font-size: 20px;
+            font-weight: bold;
+            border: 2px dashed black;
+            padding: 10px 20px;
+            border-radius: 50%;
+            opacity: 0.15;
+            z-index: 0;
           }
         </style>
       </head>
       <body>
+        <div class="stamp">${paymentStamp}</div>
         <div class="invoice-container">
           <div class="company-header">
             <div class="company-name">${companyInfo.name.toUpperCase()}</div>
@@ -460,42 +376,19 @@ const Orders = () => {
               ${companyInfo.address}<br>
               📞 ${companyInfo.phone} | ✉️ ${companyInfo.email}
             </div>
-            <div class="gst-number">GSTIN: 09ABKFR9647R1ZV</div>
+            <div class="gst-number">GSTIN: ${companyInfo.gstNumber || "09ABKFR9647R1ZV"}</div>
           </div>
-          
+
           <div class="invoice-details">
-            <div class="detail-row">
-              <span class="detail-label">Invoice #:</span>
-              <span>${invoiceNum}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Date:</span>
-              <span>${new Date(order.orderDate).toLocaleDateString('en-IN')}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Time:</span>
-              <span>${new Date(order.orderDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Cashier:</span>
-              <span>${order.user?.name || "Admin"}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Room:</span>
-              <span>${order.room?.roomName || "N/A"}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Table:</span>
-              <span>${order.table?.tableNumber || "N/A"}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Payment Method:</span>
-              <span>${order.paymentMethod ? order.paymentMethod.charAt(0).toUpperCase() + order.paymentMethod.slice(1) : "N/A"}</span>
-            </div>
+            <div class="detail-row"><span>Bill No:</span><span>${order.invoiceNum || "N/A"}</span></div>
+            <div class="detail-row"><span>Date:</span><span>${new Date(order.orderDate).toLocaleDateString()}</span></div>
+            <div class="detail-row"><span>Time:</span><span>${new Date(order.orderDate).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></div>
+            <div class="detail-row"><span>Cashier:</span><span>${order.user?.name || "Admin"}</span></div>
+            <div class="detail-row"><span>Payment:</span><span>${paymentStamp}</span></div>
           </div>
-          
+
           <div class="items-header">ORDER DETAILS</div>
-          
+
           <table class="items-table">
             <thead>
               <tr>
@@ -507,49 +400,30 @@ const Orders = () => {
             </thead>
             <tbody>
               ${order.products
-                .map(
-                  (item) => `
+                .map(item => `
                 <tr>
-                  <td class="item-name">${item.product?.name || "N/A"}</td>
+                  <td>${item.product?.name || "N/A"}</td>
                   <td class="align-right">${item.quantity || 0}</td>
                   <td class="align-right">₹${(item.price || 0).toFixed(2)}</td>
-                  <td class="align-right">₹${((item.price || 0) * (item.quantity || 0)).toFixed(2)}</td>
+                  <td class="align-right">₹${((item.price || 0) * item.quantity || 0).toFixed(2)}</td>
                 </tr>
-              `
-                )
-                .join("")}
+              `).join("")}
             </tbody>
           </table>
-          
+
           <div class="summary-section">
-            <div class="summary-row">
-              <span class="summary-label">Subtotal:</span>
-              <span class="summary-value">₹${(order.subTotal || 0).toFixed(2)}</span>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">${discountLabel}</span>
-              <span class="summary-value">- ₹${discountAmount}</span>
-            </div>
-            <div class="summary-row subtotal-row">
-              <span class="summary-label">After Discount:</span>
-              <span class="summary-value">₹${subtotalAfterDiscount}</span>
-            </div>
-            <div class="summary-row">
-              <span class="summary-label">GST (${companyInfo.taxRate}%):</span>
-              <span class="summary-value">₹${taxAmount}</span>
-            </div>
-            <div class="summary-row total-row">
-              <span>GRAND TOTAL:</span>
-              <span>₹${(order.totalAmount || 0).toFixed(2)}</span>
-            </div>
+            <div class="summary-row"><span>Subtotal:</span><span>₹${subtotal.toFixed(2)}</span></div>
+            <div class="summary-row"><span>${discountLabel}</span><span>- ₹${discountAmount.toFixed(2)}</span></div>
+            <div class="summary-row"><span>After Discount:</span><span>₹${subtotalAfterDiscount}</span></div>
+            <div class="summary-row"><span>GST (${companyInfo.taxRate}%):</span><span>₹${taxAmount}</span></div>
+            <div class="summary-row total-row"><span>Total:</span><span>₹${(order.totalAmount || 0).toFixed(2)}</span></div>
           </div>
-          
+
           <div class="footer">
-            <div class="thank-you">THANK YOU FOR YOUR VISIT</div>
-            <div>We appreciate your business!</div>
+            <div class="thank-you">Thank you! Visit Again!</div>
           </div>
         </div>
-        
+
         <script>
           window.onload = function() {
             setTimeout(() => {
@@ -561,6 +435,7 @@ const Orders = () => {
       </body>
       </html>
     `);
+
     printWindow.document.close();
   };
 
@@ -783,7 +658,11 @@ const Orders = () => {
 
           <div>
             <p className="text-gray-500">Payment Method</p>
-            <p className="font-medium capitalize">{order.paymentMethod || 'N/A'}</p>
+            <span 
+              className={`inline-block px-3 py-1 rounded-full text-xs font-medium border transition-colors ${getPaymentMethodStyle(order.paymentMethod)}`}
+            >
+              {order.paymentMethod?.toUpperCase() || 'N/A'}
+            </span>
           </div>
           
           {user.role === 'admin' && (
@@ -1265,8 +1144,12 @@ const Orders = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
                         {formatRupee(order.totalAmount || 0)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">
-                        {order.paymentMethod || 'N/A'}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <span 
+                          className={`inline-block px-3 py-1 rounded-full text-xs font-medium border transition-colors ${getPaymentMethodStyle(order.paymentMethod)}`}
+                        >
+                          {order.paymentMethod?.toUpperCase() || 'N/A'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                         <button 
