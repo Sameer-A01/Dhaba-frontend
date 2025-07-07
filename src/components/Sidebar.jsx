@@ -33,6 +33,7 @@ const Sidebar = ({ isCollapsed, toggleSidebar }) => {
     { name: 'Staff', path: '/admin-dashboard/Staff', icon: <FaUserFriends /> },
     { name: 'Users', path: '/admin-dashboard/users', icon: <FaUsers /> },
     { name: 'Expenses', path: '/admin-dashboard/Expense', icon: <FaMoneyBillWave /> },
+    { name: 'Revenue', path: '/admin-dashboard/Revenue', icon: <FaMoneyBillWave /> },
     { name: 'Tables', path: '/admin-dashboard/Table', icon: <MdTableRestaurant /> },
     { name: 'Profile', path: '/admin-dashboard/profile', icon: <FaCog /> },
     { name: 'Logout', path: '/logout', icon: <FaSignOutAlt /> },

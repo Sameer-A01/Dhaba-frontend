@@ -169,7 +169,7 @@ const Orders = () => {
     fetchProducts();
     const interval = setInterval(() => {
       fetchOrders();
-    }, 60000);
+    }, 600000);
     returnIPAddress: () => clearInterval(interval);
   }, [user.userId]);
 

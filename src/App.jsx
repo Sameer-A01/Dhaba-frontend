@@ -21,6 +21,7 @@ import Expense from "./components/Expense";
 import Table from "./components/Table";
 import KOTInterface from "./components/KOTInterface";
 import ActiveKOTsPage from "./components/ActiveKOTsPage";
+import Revenue from "./components/Revenue";
 // import DeletionHistoryPage from "./components/DeletionHistoryPage";
 
 const App = () => (
@@ -101,6 +102,14 @@ const App = () => (
             element={
               <ProtectedRoute requiredRole={["admin"]}>
                 <Orders />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="Revenue"
+            element={
+              <ProtectedRoute requiredRole={["admin"]}>
+                <Revenue />
               </ProtectedRoute>
             }
           />

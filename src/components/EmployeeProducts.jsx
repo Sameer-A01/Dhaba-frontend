@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import axiosInstance from "../utils/api";
 import { ShoppingCart, X, Printer, Settings, MapPin, Users, RefreshCw, ChevronRight, ChevronLeft, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -6,6 +6,7 @@ import KOTInterface from "./KOTInterface";
 import { Link } from "react-router-dom";
 
 const POSPage = () => {
+  // State declarations
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [rooms, setRooms] = useState([]);
@@ -32,14 +33,26 @@ const POSPage = () => {
     discount: { type: "percentage", value: 0, reason: "Standard discount" },
   });
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
 
   const billRef = useRef(null);
   const user = JSON.parse(localStorage.getItem("ims_user"));
   const userName = user?.name;
   const invoiceNum = `INV-${Date.now().toString().substr(-6)}`;
 
-  // Fetch rooms and products
-  const fetchData = async () => {
+  // Debounce search input
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchQuery]);
+
+  // Optimized data fetching with cleanup
+  const fetchData = useCallback(async () => {
     setRefreshingRooms(true);
     try {
       const [roomsResponse, productsResponse] = await Promise.all([
@@ -54,17 +67,31 @@ const POSPage = () => {
       setCategories(productsResponse.data.categories);
       setProducts(productsResponse.data.products);
     } catch (error) {
-      alert("Failed to fetch data: " + error.message);
+      console.error("Failed to fetch data:", error);
     } finally {
       setRefreshingRooms(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchData();
-    const intervalId = setInterval(fetchData, 2000);
-    return () => clearInterval(intervalId);
-  }, []);
+    let isMounted = true;
+    let intervalId;
+
+    const fetchDataWithCheck = async () => {
+      if (!isMounted) return;
+      await fetchData();
+    };
+
+    fetchDataWithCheck(); // Initial fetch
+
+    // Set interval with cleanup
+    intervalId = setInterval(fetchDataWithCheck, 6000); // 6 seconds
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [fetchData]);
 
   // Persist selectedRoom to localStorage
   useEffect(() => {
@@ -75,38 +102,92 @@ const POSPage = () => {
     }
   }, [selectedRoom]);
 
+  // Memoized room status calculation
+  const getRoomStatus = useCallback((room) => {
+    const tables = room.tables || [];
+    const occupied = tables.filter((t) => t.status === "occupied").length;
+    const available = tables.filter((t) => t.status === "available").length;
+    const reserved = tables.filter((t) => t.status === "reserved").length;
+    return { occupied, available, reserved };
+  }, []);
+
+  // Memoized filtered rooms
+  const filteredRooms = useMemo(() => {
+    return rooms.filter((room) =>
+      room.roomName.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
+    );
+  }, [rooms, debouncedSearchQuery]);
+
+  // Room item component with memoization
+  const RoomItem = useMemo(() => ({ room, selectedRoom, handleRoomSelect }) => {
+    const { occupied, available, reserved } = getRoomStatus(room);
+    
+    return (
+      <div key={room._id} className="border-b border-gray-700">
+        <motion.button
+          onClick={() => handleRoomSelect(room._id)}
+          className={`w-full text-left px-4 py-3 flex justify-between items-center hover:bg-gray-700 transition-colors ${
+            selectedRoom === room._id ? "bg-gray-700" : ""
+          }`}
+          whileHover={{ x: 5 }}
+        >
+          <div className="flex items-center gap-2">
+            <span>{room.roomName}</span>
+            <div className="flex gap-1">
+              {occupied > 0 && (
+                <span className="px-1.5 py-0.5 bg-red-500 text-white text-xs rounded-full">
+                  {occupied}
+                </span>
+              )}
+              {available > 0 && (
+                <span className="px-1.5 py-0.5 bg-green-500 text-white text-xs rounded-full">
+                  {available}
+                </span>
+              )}
+              {reserved > 0 && (
+                <span className="px-1.5 py-0.5 bg-yellow-500 text-white text-xs rounded-full">
+                  {reserved}
+                </span>
+              )}
+            </div>
+          </div>
+          <ChevronRight size={16} />
+        </motion.button>
+      </div>
+    );
+  }, [getRoomStatus]);
+
   // Handle room selection
-  const handleRoomSelect = (roomId) => {
+  const handleRoomSelect = useCallback((roomId) => {
     setSelectedRoom(roomId);
     setShowTableSelection(true);
-  };
+  }, []);
 
   // Handle table selection
-  const handleTableSelect = (roomId, tableId) => {
+  const handleTableSelect = useCallback((roomId, tableId) => {
     setSelectedRoom(roomId);
     setSelectedTable(tableId);
     setShowTableSelection(false);
     setIsSidebarOpen(false);
-  };
+  }, []);
 
   // Handle back to table selection
-  const handleBackToTables = () => {
+  const handleBackToTables = useCallback(() => {
     setShowTableSelection(true);
     setSelectedTable("");
     setIsSidebarOpen(true);
-  };
+  }, []);
 
   // Handle new KOT creation
-  const handleNewKOT = () => {
+  const handleNewKOT = useCallback(() => {
     setShowTableSelection(false);
     setIsSidebarOpen(false);
-  };
+  }, []);
 
   // Handle adding KOT items to bill
-  const handleAddToBill = async (kot = null, generateFinalBill = false, paymentMethod = "cash", kotDiscount = null) => {
+  const handleAddToBill = useCallback(async (kot = null, generateFinalBill = false, paymentMethod = "cash", kotDiscount = null) => {
     try {
       const response = await axiosInstance.get(`/kot?tableId=${selectedTable}&status=preparing,ready`);
-    
       const kots = response.data.kots;
 
       const itemMap = new Map();
@@ -128,7 +209,6 @@ const POSPage = () => {
       const items = Array.from(itemMap.values());
       const totalAmount = items.reduce((sum, item) => sum + item.itemTotal, 0);
 
-      // Use KOT-specific discount if provided, otherwise fall back to companyInfo.discount
       const discountToUse = kotDiscount || {
         type: "percentage",
         value: parseFloat(companyInfo.discount) || 0,
@@ -173,10 +253,10 @@ const POSPage = () => {
       console.error("Error details:", error.response?.data || error.message);
       alert("Failed to generate bill: " + (error.response?.data?.message || error.message));
     }
-  };
+  }, [selectedTable, products, companyInfo.discount, selectedRoom, fetchData]);
 
   // Handle printing KOT
-  const handlePrintKOT = (kot) => {
+  const handlePrintKOT = useCallback((kot) => {
     const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
     if (!printWindow) {
       alert("Pop-up blocked! Please allow pop-ups to print KOT.");
@@ -231,186 +311,190 @@ const POSPage = () => {
           ${kot.orderItems.map(item => `<div>${item.product.name.toUpperCase()} (${item.quantity})</div>`).join('')}
         </div>
         <script>
-          setTimeout(() => window.print(), 100);
+          setTimeout(() => {
+            window.print();
+            setTimeout(() => window.close(), 1000);
+          }, 100);
         </script>
       </body>
       </html>
     `);
     printWindow.document.close();
-  };
+  }, [rooms]);
 
   // Handle bill printing
- const handlePrintBill = () => {
-  const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
-  if (!printWindow) {
-    alert("Pop-up blocked! Please allow pop-ups to print the bill.");
-    return;
-  }
+  const handlePrintBill = useCallback(() => {
+    const printWindow = window.open("", "_blank", "width=800,height=1000,scrollbars=yes,resizable=yes");
+    if (!printWindow) {
+      alert("Pop-up blocked! Please allow pop-ups to print the bill.");
+      return;
+    }
 
-  const totalItems = billData.items.reduce((sum, item) => sum + item.quantity, 0);
-  const discount = calculateDiscount();
-  const subtotal = billData.totalAmount.toFixed(2);
-  const afterDiscount = calculateSubtotalAfterDiscount();
-  const gst = calculateTax();
-  const grandTotal = calculateGrandTotal();
-  const totalSavings = discount;
+    const totalItems = billData.items.reduce((sum, item) => sum + item.quantity, 0);
+    const discount = calculateDiscount();
+    const subtotal = billData.totalAmount.toFixed(2);
+    const afterDiscount = calculateSubtotalAfterDiscount();
+    const gst = calculateTax();
+    const grandTotal = calculateGrandTotal();
+    const totalSavings = discount;
 
-  const room = rooms.find(r => r._id === selectedRoom);
-  const table = room?.tables.find(t => t._id === selectedTable);
+    const room = rooms.find(r => r._id === selectedRoom);
+    const table = room?.tables.find(t => t._id === selectedTable);
 
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="UTF-8">
-      <title>Bill - ${companyInfo.name}</title>
-      <style>
-        @page { size: 80mm auto; margin: 1.5mm; }
-        body {
-          font-family: 'Courier New', monospace;
-          font-size: 13.5px;
-          font-weight: 900;
-          width: 76mm;
-          padding: 2mm;
-          margin: 0;
-          color: #000;
-        }
-        @media print {
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Bill - ${companyInfo.name}</title>
+        <style>
+          @page { size: 80mm auto; margin: 1.5mm; }
           body {
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-            -webkit-font-smoothing: none;
-            font-smooth: never;
+            font-family: 'Courier New', monospace;
+            font-size: 13.5px;
+            font-weight: 900;
+            width: 76mm;
+            padding: 2mm;
+            margin: 0;
+            color: #000;
           }
-        }
-        .center { text-align: center; }
-        .bold { font-weight: 900; }
-        .line { border-bottom: 1px dashed #000; margin: 5px 0; }
-        .item-row {
-          display: flex;
-          justify-content: space-between;
-          margin: 2px 0;
-          white-space: nowrap;
-        }
-        .item-name { width: 42%; }
-        .item-qty { width: 13%; text-align: right; }
-        .item-rate { width: 20%; text-align: right; }
-        .item-total { width: 25%; text-align: right; }
-        .summary-line {
-          display: flex;
-          justify-content: space-between;
-          margin: 3px 0;
-        }
-        .section {
-          margin: 5px 0;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="center bold">${companyInfo.name}</div>
-      <div class="center">${companyInfo.address}</div>
-      <div class="center">GSTIN: 09ABKFR9647R1ZV</div>
-      <div class="center">Phone: ${companyInfo.phone}</div>
-      <div class="line"></div>
-      <div class="section">
-        <div>Bill No: ${invoiceNum}</div>
-        <div>Date: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-        <div>Table: ${room?.roomName || "N/A"} - ${table?.tableNumber || "N/A"}</div>
-        <div>Payment: ${billData.paymentMethod.charAt(0).toUpperCase() + billData.paymentMethod.slice(1)}</div>
-      </div>
-      <div class="line"></div>
-      <div class="item-row bold">
-        <span class="item-name">Item</span>
-        <span class="item-qty">Qty</span>
-        <span class="item-rate">Rate</span>
-        <span class="item-total">Total</span>
-      </div>
-      ${billData.items.map(item => `
-        <div class="item-row">
-          <span class="item-name">${item.product.name}</span>
-          <span class="item-qty">${item.quantity}</span>
-          <span class="item-rate">${item.product.price.toFixed(2)}</span>
-          <span class="item-total">${item.itemTotal.toFixed(2)}</span>
+          @media print {
+            body {
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+              -webkit-font-smoothing: none;
+              font-smooth: never;
+            }
+          }
+          .center { text-align: center; }
+          .bold { font-weight: 900; }
+          .line { border-bottom: 1px dashed #000; margin: 5px 0; }
+          .item-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 2px 0;
+            white-space: nowrap;
+          }
+          .item-name { width: 42%; }
+          .item-qty { width: 13%; text-align: right; }
+          .item-rate { width: 20%; text-align: right; }
+          .item-total { width: 25%; text-align: right; }
+          .summary-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+          }
+          .section {
+            margin: 5px 0;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="center bold">${companyInfo.name}</div>
+        <div class="center">${companyInfo.address}</div>
+        <div class="center">GSTIN: 09ABKFR9647R1ZV</div>
+        <div class="center">Phone: ${companyInfo.phone}</div>
+        <div class="line"></div>
+        <div class="section">
+          <div>Bill No: ${invoiceNum}</div>
+          <div>Date: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+          <div>Table: ${room?.roomName || "N/A"} - ${table?.tableNumber || "N/A"}</div>
+          <div>Payment: ${billData.paymentMethod.charAt(0).toUpperCase() + billData.paymentMethod.slice(1)}</div>
         </div>
-      `).join('')}
-      <div class="line"></div>
-      <div class="section">
-        <div>Total Items: ${billData.items.length}</div>
-        <div>Total Qty: ${totalItems}</div>
-      </div>
-      <div class="line"></div>
-      <div class="summary-line"><span>Sub Total:</span><span>₹${subtotal}</span></div>
-      ${discount !== "0.00" ? `<div class="summary-line"><span>Discount:</span><span>-₹${discount}</span></div>` : ""}
-      ${discount !== "0.00" ? `<div class="summary-line"><span>After Discount:</span><span>₹${afterDiscount}</span></div>` : ""}
-      <div class="summary-line"><span>GST:</span><span>₹${gst}</span></div>
-      <div class="summary-line bold"><span>Total:</span><span>₹${grandTotal}</span></div>
-      <div class="summary-line"><span>Balance:</span><span>₹${grandTotal}</span></div>
-      <div class="line"></div>
-      ${discount !== "0.00" ? `<div class="center bold">You Saved ₹${totalSavings}</div>` : ""}
-      <div class="center bold">Thank You! Visit Again!</div>
-      <script>
-        window.onload = function() {
-          setTimeout(() => {
-            window.print();
-            setTimeout(() => window.close(), 1000);
-          }, 500);
-        };
-      </script>
-    </body>
-    </html>
-  `);
-  printWindow.document.close();
-};
+        <div class="line"></div>
+        <div class="item-row bold">
+          <span class="item-name">Item</span>
+          <span class="item-qty">Qty</span>
+          <span class="item-rate">Rate</span>
+          <span class="item-total">Total</span>
+        </div>
+        ${billData.items.map(item => `
+          <div class="item-row">
+            <span class="item-name">${item.product.name}</span>
+            <span class="item-qty">${item.quantity}</span>
+            <span class="item-rate">${item.product.price.toFixed(2)}</span>
+            <span class="item-total">${item.itemTotal.toFixed(2)}</span>
+          </div>
+        `).join('')}
+        <div class="line"></div>
+        <div class="section">
+          <div>Total Items: ${billData.items.length}</div>
+          <div>Total Qty: ${totalItems}</div>
+        </div>
+        <div class="line"></div>
+        <div class="summary-line"><span>Sub Total:</span><span>₹${subtotal}</span></div>
+        ${discount !== "0.00" ? `<div class="summary-line"><span>Discount:</span><span>-₹${discount}</span></div>` : ""}
+        ${discount !== "0.00" ? `<div class="summary-line"><span>After Discount:</span><span>₹${afterDiscount}</span></div>` : ""}
+        <div class="summary-line"><span>GST:</span><span>₹${gst}</span></div>
+        <div class="summary-line bold"><span>Total:</span><span>₹${grandTotal}</span></div>
+        <div class="summary-line"><span>Balance:</span><span>₹${grandTotal}</span></div>
+        <div class="line"></div>
+        ${discount !== "0.00" ? `<div class="center bold">You Saved ₹${totalSavings}</div>` : ""}
+        <div class="center bold">Thank You! Visit Again!</div>
+        <script>
+          window.onload = function() {
+            setTimeout(() => {
+              window.print();
+              setTimeout(() => window.close(), 1000);
+            }, 500);
+          };
+        </script>
+      </body>
+      </html>
+    `);
+    printWindow.document.close();
+  }, [billData, companyInfo, selectedRoom, rooms]);
 
-  // Calculate bill totals
-  const calculateDiscount = () => {
+  // Calculate bill totals with memoization
+  const calculateDiscount = useCallback(() => {
     const discount = billData.discount || { type: "percentage", value: parseFloat(companyInfo.discount) || 0 };
     if (discount.type === "percentage") {
       return (billData.totalAmount * (discount.value / 100)).toFixed(2);
     } else {
       return Math.min(discount.value, billData.totalAmount).toFixed(2);
     }
-  };
+  }, [billData, companyInfo.discount]);
 
-  const calculateSubtotalAfterDiscount = () => {
+  const calculateSubtotalAfterDiscount = useCallback(() => {
     return (parseFloat(billData.totalAmount) - parseFloat(calculateDiscount())).toFixed(2);
-  };
+  }, [billData.totalAmount, calculateDiscount]);
 
-  const calculateTax = () => {
+  const calculateTax = useCallback(() => {
     const taxRatePercent = parseFloat(companyInfo.taxRate) || 0;
     const subtotalAfterDiscount = parseFloat(calculateSubtotalAfterDiscount());
     return (subtotalAfterDiscount * (taxRatePercent / 100)).toFixed(2);
-  };
+  }, [companyInfo.taxRate, calculateSubtotalAfterDiscount]);
 
-  const calculateGrandTotal = () => {
+  const calculateGrandTotal = useCallback(() => {
     const subtotalAfterDiscount = parseFloat(calculateSubtotalAfterDiscount());
     const tax = parseFloat(calculateTax());
     return (subtotalAfterDiscount + tax).toFixed(2);
-  };
+  }, [calculateSubtotalAfterDiscount, calculateTax]);
 
   // Handle company info change
-  const handleCompanyInfoChange = (e) => {
+  const handleCompanyInfoChange = useCallback((e) => {
     const { name, value } = e.target;
     setCompanyInfo((prev) => {
       const updated = { ...prev, [name]: value };
       localStorage.setItem(`company_${name}`, value);
       return updated;
     });
-  };
+  }, []);
 
-  // Get room status summary
-  const getRoomStatus = (room) => {
-    const tables = room.tables || [];
-    const occupied = tables.filter((t) => t.status === "occupied").length;
-    const available = tables.filter((t) => t.status === "available").length;
-    const reserved = tables.filter((t) => t.status === "reserved").length;
-    return { occupied, available, reserved };
-  };
-
-  // Filter rooms based on search query
-  const filteredRooms = rooms.filter((room) =>
-    room.roomName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Handle closing bill with cleanup
+  const handleCloseBill = useCallback(() => {
+    setShowBill(false);
+    setBillData({
+      kots: [],
+      totalAmount: 0,
+      items: [],
+      paymentMethod: "cash",
+      discount: { type: "percentage", value: 0, reason: "Standard discount" },
+    });
+    setShowTableSelection(true);
+    setSelectedTable("");
+    setIsSidebarOpen(true);
+  }, []);
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -450,42 +534,14 @@ const POSPage = () => {
             </div>
             {/* Room List */}
             <div className="flex-1 overflow-y-auto">
-              {filteredRooms.map((room) => {
-                const { occupied, available, reserved } = getRoomStatus(room);
-                return (
-                  <div key={room._id} className="border-b border-gray-700">
-                    <motion.button
-                      onClick={() => handleRoomSelect(room._id)}
-                      className={`w-full text-left px-4 py-3 flex justify-between items-center hover:bg-gray-700 transition-colors ${
-                        selectedRoom === room._id ? "bg-gray-700" : ""
-                      }`}
-                      whileHover={{ x: 5 }}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span>{room.roomName}</span>
-                        <div className="flex gap-1">
-                          {occupied > 0 && (
-                            <span className="px-1.5 py-0.5 bg-red-500 text-white text-xs rounded-full">
-                              {occupied}
-                            </span>
-                          )}
-                          {available > 0 && (
-                            <span className="px-1.5 py-0.5 bg-green-500 text-white text-xs rounded-full">
-                              {available}
-                            </span>
-                          )}
-                          {reserved > 0 && (
-                            <span className="px-1.5 py-0.5 bg-yellow-500 text-white text-xs rounded-full">
-                              {reserved}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <ChevronRight size={16} />
-                    </motion.button>
-                  </div>
-                );
-              })}
+              {filteredRooms.map((room) => (
+                <RoomItem
+                  key={room._id}
+                  room={room}
+                  selectedRoom={selectedRoom}
+                  handleRoomSelect={handleRoomSelect}
+                />
+              ))}
               {filteredRooms.length === 0 && (
                 <p className="px-4 py-3 text-gray-400 text-sm">No rooms found.</p>
               )}
@@ -675,7 +731,7 @@ const POSPage = () => {
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-xl font-bold text-gray-800">Invoice</h2>
                   <button
-                    onClick={() => setShowBill(false)}
+                    onClick={handleCloseBill}
                     className="text-gray-500 hover:text-gray-700 transition-colors"
                     aria-label="Close invoice"
                   >
@@ -784,12 +840,7 @@ const POSPage = () => {
                     <span>Print Invoice</span>
                   </motion.button>
                   <motion.button
-                    onClick={() => {
-                      setShowBill(false);
-                      setShowTableSelection(true);
-                      setSelectedTable("");
-                      setIsSidebarOpen(true);
-                    }}
+                    onClick={handleCloseBill}
                     className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-4 py-3 rounded-lg font-medium transition-all shadow-md"
                     whileHover={{ y: -2 }}
                     whileTap={{ scale: 0.98 }}
@@ -834,52 +885,54 @@ const POSPage = () => {
                 {selectedRoom ? (
                   <div className="space-y-3">
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {rooms
-                        .find((r) => r._id === selectedRoom)
-                        ?.tables.map((table) => (
-                          <motion.div
-                            key={table._id}
-                            onClick={() => handleTableSelect(selectedRoom, table._id)}
-                            className={`p-4 border-2 rounded-xl transition-all ${
-                              table.status !== "available"
-                                ? "opacity-50 cursor-not-allowed border-gray-200 bg-gray-50"
-                                : "border-gray-200 hover:border-blue-300 hover:shadow-sm cursor-pointer"
-                            }`}
-                            whileHover={table.status === "available" ? { scale: 1.02 } : {}}
-                            whileTap={table.status === "available" ? { scale: 0.98 } : {}}
-                          >
-                            <div className="space-y-2">
-                              <div className="flex justify-between items-start">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-2xl">
-                                    {table.tableType === "booth" ? "🛋️" : table.tableType === "high-top" ? "🍸" : table.tableType === "outdoor" ? "🌳" : "🍽️"}
-                                  </span>
-                                  <div>
-                                    <h4 className="font-semibold text-gray-800">Table {table.tableNumber}</h4>
-                                    <p className="text-sm text-gray-600">{table.tableType}</p>
-                                  </div>
-                                </div>
-                                <div
-                                  className={`px-2 py-1 rounded-full text-xs font-medium border ${
-                                    table.status === "available"
-                                      ? "bg-green-100 text-green-800 border-green-200"
-                                      : table.status === "occupied"
-                                      ? "bg-red-100 text-red-800 border-red-200"
-                                      : table.status === "reserved"
-                                      ? "bg-yellow-100 text-yellow-800 border-yellow-200"
-                                      : "bg-gray-100 text-gray-800 border-gray-200"
-                                  }`}
-                                >
-                                  {table.status === "occupied" ? "KOT Running (Occupied)" : table.status}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-1 text-sm text-gray-600">
-                                <Users className="w-4 h-4" />
-                                <span>{table.seatingCapacity} seats</span>
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
+                     {rooms
+  .find((r) => r._id === selectedRoom)
+  ?.tables.map((table) => (
+    <motion.div
+      key={table._id}
+      onClick={() => handleTableSelect(selectedRoom, table._id)}
+      className={`p-4 border-2 rounded-xl transition-all ${
+        table.status !== "available"
+          ? "border-gray-300 bg-gray-100"
+          : "border-gray-200 hover:border-blue-300 hover:shadow-sm bg-white"
+      }`}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+    >
+      <div className="space-y-2">
+        <div className="flex justify-between items-start">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">
+              {table.tableType === "booth" ? "🛋️" : 
+               table.tableType === "high-top" ? "🍸" : 
+               table.tableType === "outdoor" ? "🌳" : "🍽️"}
+            </span>
+            <div>
+              <h4 className="font-semibold text-gray-800">Table {table.tableNumber}</h4>
+              <p className="text-sm text-gray-600">{table.tableType}</p>
+            </div>
+          </div>
+          <div
+            className={`px-2 py-1 rounded-full text-xs font-medium border ${
+              table.status === "available"
+                ? "bg-green-100 text-green-800 border-green-200"
+                : table.status === "occupied"
+                ? "bg-red-100 text-red-800 border-red-200"
+                : table.status === "reserved"
+                ? "bg-yellow-100 text-yellow-800 border-yellow-200"
+                : "bg-gray-100 text-gray-800 border-gray-200"
+            }`}
+          >
+            {table.status === "occupied" ? "KOT Running" : table.status}
+          </div>
+        </div>
+        <div className="flex items-center gap-1 text-sm text-gray-600">
+          <Users className="w-4 h-4" />
+          <span>{table.seatingCapacity} seats</span>
+        </div>
+      </div>
+    </motion.div>
+  ))}
                     </div>
                   </div>
                 ) : (
@@ -904,4 +957,4 @@ const POSPage = () => {
   );
 };
 
-export default POSPage;
+export default React.memo(POSPage);
