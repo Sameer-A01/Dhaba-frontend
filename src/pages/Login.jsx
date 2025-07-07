@@ -94,6 +94,9 @@ const Login = () => {
             </button>
           </form>
         </div>
+        <footer className="relative z-10 text-[#fffaf0] text-sm font-['Lora'] mt-4">
+          Designed and developed by <a href="https://webaziz.in" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:text-amber-300 transition duration-200">webaziz.in</a>
+        </footer>
       </div>
     </div>
   );

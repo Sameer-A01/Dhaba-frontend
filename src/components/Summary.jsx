@@ -163,6 +163,7 @@ const Summary = () => {
               "Where Royal Flavors Meet Authentic Taste"
             </p>
             <p className="text-gray-600 mt-1 text-base">Real-time business insights and analytics</p>
+            <p className="relative z-10 text-[#000000] text-sm font-['Lora'] mt-4">  Designed and developed by <a href="https://webaziz.in" target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:text-amber-300 transition duration-200">webaziz.in</a></p>
           </div>
         </div>
         
