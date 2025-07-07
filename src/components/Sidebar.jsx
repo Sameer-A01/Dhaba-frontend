@@ -18,6 +18,7 @@ import {
   FaBars,
 } from 'react-icons/fa';
 import { MdTableRestaurant } from 'react-icons/md';
+import { TbReportMoney } from 'react-icons/tb'; // ✅ added import for Revenue icon
 
 const Sidebar = ({ isCollapsed, toggleSidebar }) => {
   const [itemsToRender, setItemsToRender] = useState([]);
@@ -33,7 +34,7 @@ const Sidebar = ({ isCollapsed, toggleSidebar }) => {
     { name: 'Staff', path: '/admin-dashboard/Staff', icon: <FaUserFriends /> },
     { name: 'Users', path: '/admin-dashboard/users', icon: <FaUsers /> },
     { name: 'Expenses', path: '/admin-dashboard/Expense', icon: <FaMoneyBillWave /> },
-    { name: 'Revenue', path: '/admin-dashboard/Revenue', icon: <FaMoneyBillWave /> },
+    { name: 'Revenue', path: '/admin-dashboard/Revenue', icon: <TbReportMoney /> },
     { name: 'Tables', path: '/admin-dashboard/Table', icon: <MdTableRestaurant /> },
     { name: 'Profile', path: '/admin-dashboard/profile', icon: <FaCog /> },
     { name: 'Logout', path: '/logout', icon: <FaSignOutAlt /> },

@@ -10,7 +10,8 @@ import {
   FileText, 
   Receipt, 
   Tag, 
-  Save 
+  Save,
+  CreditCard 
 } from 'lucide-react';
 
 const EditOrderModal = ({ 
@@ -34,6 +35,9 @@ const EditOrderModal = ({
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const modalRef = useRef(null);
   const searchInputRef = useRef(null);
+
+  // Available payment methods (matching backend validation)
+  const paymentMethods = ['cash', 'card', 'upi', 'wallet'];
 
   // Calculate totals
   const subtotal = editForm.products.reduce((sum, item) => {
@@ -214,7 +218,7 @@ const EditOrderModal = ({
               </div>
             </div>
 
-            {/* Right: Discount, Notes, and Summary */}
+            {/* Right: Discount, Payment Method, Notes, and Summary */}
             <div className="w-full lg:w-64 flex flex-col gap-3">
               {/* Discount Section */}
               <div className="bg-white rounded shadow-sm border border-gray-200 overflow-hidden">
@@ -253,6 +257,31 @@ const EditOrderModal = ({
                     disabled={!editForm.discount?.type}
                     aria-label="Discount reason"
                   />
+                </div>
+              </div>
+
+              {/* Payment Method Section */}
+              <div className="bg-white rounded shadow-sm border border-gray-200 overflow-hidden">
+                <div className="bg-gray-100 p-3 border-b border-gray-200">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-gray-600" />
+                    <h3 className="text-sm font-medium text-gray-800">Payment Method</h3>
+                  </div>
+                </div>
+                <div className="p-3">
+                  <select
+                    value={editForm.paymentMethod || ''}
+                    onChange={(e) => setEditForm({ ...editForm, paymentMethod: e.target.value })}
+                    className="w-full p-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                    aria-label="Payment method"
+                  >
+                    <option value="">Select Payment Method</option>
+                    {paymentMethods.map(method => (
+                      <option key={method} value={method}>
+                        {method.charAt(0).toUpperCase() + method.slice(1)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -369,6 +398,9 @@ const EditOrderModal = ({
                   </p>
                   <p className="text-gray-600">
                     <strong>Date:</strong> {new Date().toLocaleString()}
+                  </p>
+                  <p className="text-gray-600">
+                    <strong>Payment Method:</strong> {editForm.paymentMethod ? editForm.paymentMethod.charAt(0).toUpperCase() + editForm.paymentMethod.slice(1) : 'N/A'}
                   </p>
                 </div>
 

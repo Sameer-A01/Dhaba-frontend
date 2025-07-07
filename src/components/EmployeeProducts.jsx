@@ -341,107 +341,128 @@ const POSPage = () => {
     const room = rooms.find(r => r._id === selectedRoom);
     const table = room?.tables.find(t => t._id === selectedTable);
 
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <title>Bill - ${companyInfo.name}</title>
-        <style>
-          @page { size: 80mm auto; margin: 1.5mm; }
-          body {
-            font-family: 'Courier New', monospace;
-            font-size: 13.5px;
-            font-weight: 900;
-            width: 76mm;
-            padding: 2mm;
-            margin: 0;
-            color: #000;
-          }
-          @media print {
-            body {
-              -webkit-print-color-adjust: exact;
-              print-color-adjust: exact;
-              -webkit-font-smoothing: none;
-              font-smooth: never;
-            }
-          }
-          .center { text-align: center; }
-          .bold { font-weight: 900; }
-          .line { border-bottom: 1px dashed #000; margin: 5px 0; }
-          .item-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 2px 0;
-            white-space: nowrap;
-          }
-          .item-name { width: 42%; }
-          .item-qty { width: 13%; text-align: right; }
-          .item-rate { width: 20%; text-align: right; }
-          .item-total { width: 25%; text-align: right; }
-          .summary-line {
-            display: flex;
-            justify-content: space-between;
-            margin: 3px 0;
-          }
-          .section {
-            margin: 5px 0;
-          }
-        </style>
-      </head>
-      <body>
-        <div class="center bold">${companyInfo.name}</div>
-        <div class="center">${companyInfo.address}</div>
-        <div class="center">GSTIN: 09ABKFR9647R1ZV</div>
-        <div class="center">Phone: ${companyInfo.phone}</div>
-        <div class="line"></div>
-        <div class="section">
-          <div>Bill No: ${invoiceNum}</div>
-          <div>Date: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
-          <div>Table: ${room?.roomName || "N/A"} - ${table?.tableNumber || "N/A"}</div>
-          <div>Payment: ${billData.paymentMethod.charAt(0).toUpperCase() + billData.paymentMethod.slice(1)}</div>
-        </div>
-        <div class="line"></div>
-        <div class="item-row bold">
-          <span class="item-name">Item</span>
-          <span class="item-qty">Qty</span>
-          <span class="item-rate">Rate</span>
-          <span class="item-total">Total</span>
-        </div>
-        ${billData.items.map(item => `
-          <div class="item-row">
-            <span class="item-name">${item.product.name}</span>
-            <span class="item-qty">${item.quantity}</span>
-            <span class="item-rate">${item.product.price.toFixed(2)}</span>
-            <span class="item-total">${item.itemTotal.toFixed(2)}</span>
-          </div>
-        `).join('')}
-        <div class="line"></div>
-        <div class="section">
-          <div>Total Items: ${billData.items.length}</div>
-          <div>Total Qty: ${totalItems}</div>
-        </div>
-        <div class="line"></div>
-        <div class="summary-line"><span>Sub Total:</span><span>₹${subtotal}</span></div>
-        ${discount !== "0.00" ? `<div class="summary-line"><span>Discount:</span><span>-₹${discount}</span></div>` : ""}
-        ${discount !== "0.00" ? `<div class="summary-line"><span>After Discount:</span><span>₹${afterDiscount}</span></div>` : ""}
-        <div class="summary-line"><span>GST:</span><span>₹${gst}</span></div>
-        <div class="summary-line bold"><span>Total:</span><span>₹${grandTotal}</span></div>
-        <div class="summary-line"><span>Balance:</span><span>₹${grandTotal}</span></div>
-        <div class="line"></div>
-        ${discount !== "0.00" ? `<div class="center bold">You Saved ₹${totalSavings}</div>` : ""}
-        <div class="center bold">Thank You! Visit Again!</div>
-        <script>
-          window.onload = function() {
-            setTimeout(() => {
-              window.print();
-              setTimeout(() => window.close(), 1000);
-            }, 500);
-          };
-        </script>
-      </body>
-      </html>
-    `);
+printWindow.document.write(`
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Bill - ${companyInfo.name}</title>
+    <style>
+      @page { size: 80mm auto; margin: 1.5mm; }
+      body {
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        font-weight: 530;
+        width: 76mm;
+        padding: 3mm 2mm;
+        margin: 0;
+        color: #000;
+        line-height: 1.8;
+      }
+      @media print {
+        body {
+          -webkit-print-color-adjust: exact;
+          print-color-adjust: exact;
+          -webkit-font-smoothing: none;
+          font-smooth: never;
+        }
+      }
+      .center { text-align: center; }
+      .header-title {
+        font-size: 18px;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+      .line {
+        border-bottom: 1px dashed #000;
+        margin: 7px 0;
+      }
+      .item-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 5px 0;
+        white-space: nowrap;
+      }
+      .item-name { width: 42%; }
+      .item-qty { width: 13%; text-align: right; }
+      .item-rate { width: 20%; text-align: right; }
+      .item-total { width: 25%; text-align: right; }
+      .summary-line {
+        display: flex;
+        justify-content: space-between;
+        margin: 5px 0;
+      }
+      .section {
+        margin: 10px 0;
+      }
+      .highlight-label {
+        font-weight: 700;
+      }
+      .summary-bold {
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="center header-title">${companyInfo.name}</div>
+    <div class="center">${companyInfo.address}</div>
+    <div class="center">GSTIN: 09ABKFR9647R1ZV</div>
+    <div class="center">Phone: ${companyInfo.phone}</div>
+
+    <div class="line"></div>
+    <div class="section">
+      <div><span class="highlight-label">Bill No:</span> ${invoiceNum}</div>
+      <div><span class="highlight-label">Date:</span> ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+      <div><span class="highlight-label">Table:</span> ${room?.roomName || "N/A"} - ${table?.tableNumber || "N/A"}</div>
+      <div>Payment: ${billData.paymentMethod.charAt(0).toUpperCase() + billData.paymentMethod.slice(1)}</div>
+    </div>
+
+    <div class="line"></div>
+    <div class="item-row summary-bold">
+      <span class="item-name">Item</span>
+      <span class="item-qty">Qty</span>
+      <span class="item-rate">Rate</span>
+      <span class="item-total">Total</span>
+    </div>
+
+    ${billData.items.map(item => `
+      <div class="item-row">
+        <span class="item-name">${item.product.name}</span>
+        <span class="item-qty">${item.quantity}</span>
+        <span class="item-rate">${item.product.price.toFixed(2)}</span>
+        <span class="item-total">${item.itemTotal.toFixed(2)}</span>
+      </div>
+    `).join('')}
+
+    <div class="line"></div>
+    <div class="section"><span class="highlight-label">Qty:</span> ${totalItems}</div>
+    <div class="line"></div>
+
+    <div class="summary-line"><span>Sub Total:</span><span>₹${subtotal}</span></div>
+    ${discount !== "0.00" ? `<div class="summary-line"><span>Discount:</span><span>-₹${discount}</span></div>` : ""}
+    ${discount !== "0.00" ? `<div class="summary-line"><span>After Discount:</span><span>₹${afterDiscount}</span></div>` : ""}
+    <div class="summary-line"><span>GST:</span><span>₹${gst}</span></div>
+    <div class="summary-line summary-bold"><span>Total:</span><span>₹${grandTotal}</span></div>
+    <div class="summary-line"><span>Balance:</span><span>₹${grandTotal}</span></div>
+
+    <div class="line"></div>
+    ${discount !== "0.00" ? `<div class="center summary-bold">You Saved ₹${totalSavings}</div>` : ""}
+    <div class="center summary-bold">Thank You! Visit Again!</div>
+
+    <script>
+      window.onload = function() {
+        setTimeout(() => {
+          window.print();
+          setTimeout(() => window.close(), 1000);
+        }, 500);
+      };
+    </script>
+  </body>
+  </html>
+`);
+
+
+
     printWindow.document.close();
   }, [billData, companyInfo, selectedRoom, rooms]);
 
